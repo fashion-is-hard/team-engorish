@@ -1,0 +1,139 @@
+.container{
+
+  background:#F4F4F4;
+  min-height:100vh;
+
+  padding:16px;
+
+}
+
+/* HEADER */
+
+.header{
+
+  display:flex;
+  align-items:center;
+
+  gap:10px;
+
+  margin-bottom:20px;
+
+}
+
+.header h1{
+
+  font-size:20px;
+  font-weight:600;
+
+}
+
+.back{
+
+  border:none;
+  background:none;
+
+  font-size:20px;
+
+}
+
+/* TITLE */
+
+.sectionTitle{
+
+  font-size:22px;
+  font-weight:600;
+
+  margin-bottom:14px;
+
+}
+
+/* TABS */
+
+.tabs{
+
+  display:flex;
+
+  gap:8px;
+
+  margin-bottom:20px;
+
+}
+
+.tab{
+
+  padding:6px 12px;
+
+  border-radius:16px;
+
+  border:1px solid #D8D8D8;
+
+  background:white;
+
+  font-size:13px;
+
+}
+
+.active{
+
+  background:#5E646E;
+
+  color:white;
+
+  border:none;
+
+}
+
+/* GRID */
+
+.grid{
+
+  display:grid;
+
+  grid-template-columns:1fr 1fr;
+
+  gap:16px;
+
+}
+
+/* CARD */
+
+.card{
+
+  background:white;
+
+  border-radius:12px;
+
+  padding:12px;
+
+  box-shadow:0 2px 8px rgba(0,0,0,0.08);
+
+}
+
+.image{
+
+  width:100%;
+
+  border-radius:8px;
+
+  margin-bottom:8px;
+
+}
+
+.badge{
+
+  font-size:12px;
+
+  background:#D8D8D8;
+
+  padding:3px 8px;
+
+  border-radius:10px;
+
+}
+
+.name{
+
+  font-size:14px;
+  margin-top:6px;
+
+}

@@ -1,54 +1,34 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "@/lib/supabase";
+import styles from "./BootPage.module.css";
 
 export default function BootPage() {
+
   const navigate = useNavigate();
 
   useEffect(() => {
-    init();
-  }, []);
 
-  async function init() {
-    try {
-      const { data } = await supabase.auth.getSession();
+    const timer = setTimeout(() => {
 
-      const session = data.session;
+      const session = localStorage.getItem("session");
 
-      if (!session) {
+      if(session){
+        navigate("/home");
+      }else{
         navigate("/login");
-        return;
       }
 
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", session.user.id)
-        .single();
+    },2000);
 
-      if (!profile) {
-        navigate("/login");
-        return;
-      }
+    return () => clearTimeout(timer);
 
-      navigate("/landing");
-    } catch (e) {
-      console.error(e);
-      navigate("/login");
-    }
-  }
+  },[]);
 
   return (
-    <div
-      style={{
-        height: "100vh",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        fontSize: "18px",
-      }}
-    >
-      Loading...
+    <div className={styles.container}>
+      <div className={styles.logo}>
+        Engorish
+      </div>
     </div>
   );
 }

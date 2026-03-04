@@ -1,0 +1,110 @@
+.container{
+
+  width:100%;
+  height:100vh;
+
+  display:flex;
+  justify-content:center;
+  align-items:center;
+
+  background:#F4F4F4;
+
+}
+
+.content{
+
+  width:90%;
+  max-width:380px;
+
+}
+
+.title{
+
+  text-align:center;
+
+  font-size:28px;
+  font-weight:600;
+
+  margin-bottom:40px;
+
+  color:#444;
+
+}
+
+.form{
+
+  display:flex;
+  flex-direction:column;
+  gap:16px;
+
+}
+
+.input{
+
+  height:48px;
+
+  border-radius:8px;
+  border:1px solid #D5D5D5;
+
+  padding:0 14px;
+
+  font-size:14px;
+
+  font-family:"AtoZ";
+
+}
+
+.input::placeholder{
+
+  color:#B5B5B5;
+
+}
+
+.button{
+
+  margin-top:8px;
+
+  height:48px;
+
+  border:none;
+  border-radius:8px;
+
+  background:#A8A8A8;
+
+  color:white;
+
+  font-size:15px;
+  font-weight:500;
+
+  cursor:pointer;
+
+}
+
+.signup{
+
+  margin-top:40px;
+
+  text-align:center;
+
+  font-size:14px;
+
+}
+
+.signup p{
+
+  margin-bottom:8px;
+
+}
+
+.signupBtn{
+
+  border:none;
+  background:none;
+
+  color:#6B7A8F;
+
+  text-decoration:underline;
+
+  cursor:pointer;
+
+}

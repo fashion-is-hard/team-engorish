@@ -1,0 +1,43 @@
+.container{
+
+  width:100%;
+  height:100vh;
+
+  display:flex;
+  justify-content:center;
+  align-items:center;
+
+  background:#5E646E;
+
+}
+
+.logo{
+
+  color:white;
+  font-size:42px;
+  font-weight:600;
+  letter-spacing:1px;
+
+  animation: logoIntro 1.6s ease forwards;
+
+}
+
+/* 로고 애니메이션 */
+
+@keyframes logoIntro {
+
+  0%{
+    opacity:0;
+    transform:scale(0.92);
+  }
+
+  40%{
+    opacity:1;
+    transform:scale(1.05);
+  }
+
+  100%{
+    transform:scale(1);
+  }
+
+}

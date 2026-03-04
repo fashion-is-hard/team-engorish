@@ -26,7 +26,7 @@ export default function ScenarioListPage() {
       {scenarios.map((s) => (
         <div key={s.scenario_id}>
           <button
-            onClick={() => navigate(`/session/${s.scenario_id}`)}
+            onClick={() => navigate(`/session/${s.scenario_id}?variant=${variant}`)}
           >
             {s.title}
           </button>

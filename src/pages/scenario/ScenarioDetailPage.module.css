@@ -1,0 +1,291 @@
+.container{
+  min-height:100vh;
+  background:#F4F4F4;
+  padding-bottom:96px; /* bottom bar space */
+}
+
+.header{
+  height:64px;
+  display:flex;
+  align-items:center;
+  padding:0 16px;
+  border-bottom:1px solid #E3E3E3;
+  background:#F4F4F4;
+  position:sticky;
+  top:0;
+  z-index:10;
+}
+
+.back{
+  border:none;
+  background:none;
+  font-size:22px;
+  cursor:pointer;
+}
+
+.top{
+  padding:18px 16px 10px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:10px;
+}
+
+.heroImg{
+  width:92px;
+  height:92px;
+  border-radius:10px;
+  object-fit:cover;
+}
+
+.pill{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  padding:6px 14px;
+  border-radius:12px;
+  background:#7E8894;
+  color:#fff;
+  font-size:12px;
+  font-weight:500;
+}
+
+.title{
+  font-size:22px;
+  font-weight:700;
+  color:#2F2F2F;
+}
+
+.sub{
+  font-size:13px;
+  color:#97A0AA;
+  margin-top:-4px;
+}
+
+.section{
+  padding:14px 16px 0;
+}
+
+.sectionPill{
+  display:inline-flex;
+  padding:6px 14px;
+  border-radius:14px;
+  background:#7E8894;
+  color:#fff;
+  font-size:12px;
+  font-weight:500;
+  margin-bottom:10px;
+}
+
+.card{
+  background:#fff;
+  border-radius:12px;
+  padding:14px;
+  box-shadow:0 2px 8px rgba(0,0,0,0.08);
+}
+
+.cardText{
+  font-size:14px;
+  color:#4B4B4B;
+}
+
+.settingsCard{
+  position:relative;
+  background:#fff;
+  border-radius:12px;
+  padding:12px 14px;
+  box-shadow:0 2px 8px rgba(0,0,0,0.08);
+}
+
+.settingsRow{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:10px 2px;
+}
+
+.settingsLabel{
+  font-size:14px;
+  color:#2F2F2F;
+  font-weight:600;
+}
+
+.settingsValue{
+  font-size:13px;
+  color:#97A0AA;
+}
+
+.divider{
+  height:1px;
+  background:#ECECEC;
+}
+
+.chev{
+  position:absolute;
+  right:10px;
+  top:50%;
+  transform:translateY(-50%);
+  color:#B0B0B0;
+  font-size:26px;
+}
+
+.exampleRow{
+  padding:8px 0;
+}
+
+.exampleEn{
+  font-size:14px;
+  font-weight:600;
+  color:#2F2F2F;
+}
+
+.exampleKo{
+  font-size:12px;
+  color:#7E8894;
+  margin-top:4px;
+}
+
+.exampleDivider{
+  height:1px;
+  background:#ECECEC;
+  margin-top:10px;
+}
+
+.notice{
+  margin:16px;
+  background:#D8D8D8;
+  border-radius:12px;
+  padding:12px 14px;
+  color:#4B4B4B;
+}
+
+.noticeTitle{
+  font-weight:700;
+  margin-bottom:6px;
+}
+
+.noticeBody{
+  font-size:13px;
+}
+
+.bottomBar{
+  position:fixed;
+  left:0;
+  right:0;
+  bottom:0;
+  padding:16px;
+  background:transparent;
+}
+
+.cta{
+  width:100%;
+  height:56px;
+  border:none;
+  border-radius:10px;
+  background:#5E646E;
+  color:#fff;
+  font-size:16px;
+  font-weight:600;
+  cursor:pointer;
+}
+
+/* Sheet */
+.backdrop{
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,0.35);
+  z-index:20;
+}
+
+.sheet{
+  position:fixed;
+  left:0;
+  right:0;
+  bottom:0;
+  background:#fff;
+  border-radius:18px 18px 0 0;
+  padding:12px 16px 16px;
+  z-index:21;
+}
+
+.sheetHandle{
+  width:54px;
+  height:5px;
+  background:#D8D8D8;
+  border-radius:999px;
+  margin:6px auto 12px;
+}
+
+.sheetTitle{
+  font-size:20px;
+  font-weight:700;
+  margin:0 0 14px;
+  color:#2F2F2F;
+}
+
+.sheetBlock{
+  margin-bottom:16px;
+}
+
+.sheetLabel{
+  font-size:14px;
+  font-weight:700;
+  margin-bottom:10px;
+  color:#2F2F2F;
+}
+
+.chips{
+  display:flex;
+  gap:10px;
+}
+
+.chip{
+  flex:0 0 auto;
+  border:1px solid #D8D8D8;
+  background:#fff;
+  border-radius:8px;
+  padding:10px 14px;
+  font-size:13px;
+  color:#97A0AA;
+  cursor:pointer;
+}
+
+.chipActive{
+  background:#7E8894;
+  border-color:#7E8894;
+  color:#fff;
+}
+
+.speedRow{
+  display:flex;
+  gap:10px;
+}
+
+.speedChip{
+  border:1px solid #D8D8D8;
+  background:#fff;
+  border-radius:8px;
+  padding:10px 14px;
+  font-size:13px;
+  color:#97A0AA;
+  cursor:pointer;
+}
+
+.speedActive{
+  background:#7E8894;
+  border-color:#7E8894;
+  color:#fff;
+}
+
+.sheetCta{
+  width:100%;
+  height:56px;
+  border:none;
+  border-radius:10px;
+  background:#5E646E;
+  color:#fff;
+  font-size:16px;
+  font-weight:700;
+  cursor:pointer;
+  margin-top:6px;
+}
