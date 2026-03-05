@@ -1,58 +1,248 @@
-import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import { supabase } from "@/lib/supabaseClient";
+import type { PackageRow, ScenarioExampleLineRow, ScenarioRow } from "@/types/db";
 import styles from "./ScenarioDetailPage.module.css";
 
-type CorrectionMode = "correct" | "suggest";
-type Difficulty = "basic" | "intermediate";
-type Speed = 0.8 | 1.0 | 1.2 | 1.5;
+type ScenarioGoalRow = {
+  goal_id: string;
+  scenario_id: string;
+  goal_text: string;
+  sort_order: number;
+};
+
+type NoticeSection = {
+  title: string;
+  bullets: string[];
+};
+
+/** ✅ A 버전 안내사항(현재 텍스트 유지) */
+const NOTICE_A: NoticeSection[] = [
+  {
+    title: "마이크 사용권한",
+    bullets: [
+      "AI와 대화를 나누기 위해서는 마이크 사용 권한이 필요해요.",
+      "말이 끝나면 반드시 마이크 버튼을 다시 눌러주세요.",
+    ],
+  },
+  {
+    title: "대화종료",
+    bullets: [
+      "대화 가능 턴수는 최대 20턴이에요. 20턴을 채우면 자동으로 대화가 종료돼요.",
+      "그 전에 대화를 종료하고 싶다면 오른쪽의 X 버튼을 눌러주세요.",
+    ],
+  },
+];
+
+/** ✅ B 버전 안내사항(너가 쉽게 수정 가능하게 분리) */
+const NOTICE_B: NoticeSection[] = [
+  {
+    title: "마이크 사용권한",
+    bullets: [
+      // TODO: B 버전 문구로 수정
+      "AI와 대화를 나누기 위해서는 마이크 사용 권한이 필요해요.",
+      "말이 끝나면 반드시 마이크 버튼을 다시 눌러주세요.",
+    ],
+  },
+  {
+    title: "대화종료",
+    bullets: [
+      // TODO: B 버전 문구로 수정
+      "목표를 달성하면 자동으로 대화가 종료돼요.",
+      "그 전에 대화를 종료하고 싶다면 오른쪽의 X 버튼을 눌러주세요.",
+    ],
+  },
+];
+
+type RouteParams = {
+  variant?: string; // "a" | "b"
+  scenarioId?: string;
+};
+
+function normalizeVariant(v?: string) {
+  return v === "b" ? "b" : "a";
+}
 
 export default function ScenarioDetailPage() {
   const navigate = useNavigate();
+  const { scenarioId, variant: rawVariant } = useParams<RouteParams>();
+  const variant = normalizeVariant(rawVariant);
+  const isB = variant === "b";
 
-  // (임시) 나중에 DB에서 불러오기
-  const scenario = useMemo(
-    () => ({
-      category: "카테고리",
-      title: "시나리오명",
-      packageName: "패키지명",
-      description: "시나리오 설명",
-      noticeTitle: "안내사항",
-      noticeBody: "• 설명 문장",
-      examples: [
-        { en: "예시 문장", ko: "번역" },
-        { en: "예시 문장", ko: "번역" },
-        { en: "예시 문장", ko: "번역" },
-      ],
-    }),
-    []
-  );
+  const [categoryName, setCategoryName] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // 설정값 (A버전 UI에서도 수집)
-  const [sheetOpen, setSheetOpen] = useState(false);
-  const [correctionMode, setCorrectionMode] = useState<CorrectionMode>("suggest");
-  const [difficulty, setDifficulty] = useState<Difficulty>("basic");
-  const [speed, setSpeed] = useState<Speed>(1.0);
+  const [scenario, setScenario] = useState<ScenarioRow | null>(null);
+  const [pkg, setPkg] = useState<PackageRow | null>(null);
 
-  const correctionLabel = correctionMode === "correct" ? "교정 하기" : "새로운 제안";
-  const difficultyLabel = difficulty === "basic" ? "Basic" : "Intermediate";
+  const [examples, setExamples] = useState<ScenarioExampleLineRow[]>([]);
+  const [goals, setGoals] = useState<ScenarioGoalRow[]>([]);
 
-  function openSettings() {
-    setSheetOpen(true);
-  }
+  useEffect(() => {
+    if (!scenarioId) return;
 
-  function closeSettings() {
-    setSheetOpen(false);
-  }
+    let cancelled = false;
 
-  function applySettings() {
-    // TODO: supabase에 session_settings로 저장 (나중에 연결)
-    setSheetOpen(false);
-  }
+    (async () => {
+      setLoading(true);
+      setError(null);
 
-  function start() {
-    // TODO: 세션 생성 후 play로 이동
-    // navigate(`/play/${scenarioId}`)
-    navigate("/play");
+      // 1) scenario
+      const { data: sData, error: sErr } = await supabase
+        .from("scenarios")
+        .select("scenario_id,package_id,title,scenario_desc,is_active,sort_order,created_at,thumb_url")
+        .eq("scenario_id", scenarioId)
+        .single();
+
+      if (cancelled) return;
+
+      if (sErr) {
+        setError(sErr.message);
+        setLoading(false);
+        return;
+      }
+
+      const s = sData as ScenarioRow;
+      setScenario(s);
+
+      // 2) package
+      const { data: pData, error: pErr } = await supabase
+        .from("packages")
+        .select("package_id,category_id,title,description,thumb_url,sort_order,is_active,created_at")
+        .eq("package_id", s.package_id)
+        .single();
+
+      if (cancelled) return;
+
+      if (pErr) {
+        setError(pErr.message);
+        setLoading(false);
+        return;
+      }
+
+      const p = pData as PackageRow;
+      setPkg(p);
+
+      // 3) category name
+      const { data: cData, error: cErr } = await supabase
+        .from("learning_categories")
+        .select("name")
+        .eq("category_id", p.category_id)
+        .single();
+
+      if (cancelled) return;
+
+      if (cErr) {
+        setError(cErr.message);
+        setLoading(false);
+        return;
+      }
+      setCategoryName((cData as { name: string }).name ?? "");
+
+      // 4) A: example lines
+      if (!isB) {
+        const { data: eData, error: eErr } = await supabase
+          .from("scenario_example_lines")
+          .select("example_id,scenario_id,text_en,text_ko,sort_order")
+          .eq("scenario_id", scenarioId)
+          .order("sort_order", { ascending: true });
+
+        if (cancelled) return;
+
+        if (eErr) {
+          setError(eErr.message);
+          setLoading(false);
+          return;
+        }
+
+        setExamples((eData ?? []) as ScenarioExampleLineRow[]);
+        setGoals([]);
+      }
+
+      // 5) B: goals
+      if (isB) {
+        const { data: gData, error: gErr } = await supabase
+          .from("scenario_goals")
+          .select("goal_id,scenario_id,goal_text,sort_order")
+          .eq("scenario_id", scenarioId)
+          .order("sort_order", { ascending: true });
+
+        if (cancelled) return;
+
+        if (gErr) {
+          setError(gErr.message);
+          setLoading(false);
+          return;
+        }
+
+        setGoals((gData ?? []) as ScenarioGoalRow[]);
+        setExamples([]);
+      }
+
+      setLoading(false);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [scenarioId, isB]);
+
+  const heroImg = useMemo(() => {
+    if (scenario?.thumb_url && scenario.thumb_url.trim()) return `/${scenario.thumb_url}.png`;
+    return "/scenario.png";
+  }, [scenario]);
+
+  const notice = isB ? NOTICE_B : NOTICE_A;
+
+  async function startSession() {
+    if (!scenarioId || !scenario) {
+      alert("시나리오 정보를 불러오는 중입니다. 잠시 후 다시 시도해 주세요.");
+      return;
+    }
+
+    const { data: auth, error: authErr } = await supabase.auth.getUser();
+    if (authErr) console.log("authErr:", authErr);
+
+    const userId = auth.user?.id;
+    if (!userId) {
+      alert("로그인이 필요합니다.");
+      navigate("/auth/login");
+      return;
+    }
+
+    // ✅ returning/select 권한 이슈 회피: 프론트에서 session_id 생성
+    const session_id = crypto.randomUUID();
+
+    const payload = {
+      session_id,
+      user_id: userId,
+      variant: variant.toUpperCase(), // "A" | "B"
+      package_id: scenario.package_id,
+      scenario_id: scenario.scenario_id,
+      started_at: new Date().toISOString(),
+      ended_at: null,
+      status: "active",
+      end_reason: null,
+      turn_count_user: 0,
+      turn_count_ai: 0,
+      turn_limit: isB ? null : 20, // ✅ B는 턴 제한 없음(원하면 null)
+      platform: "web",
+      model_name: null as any,
+    };
+
+    const { error: insErr } = await supabase
+      .from("roleplay_sessions")
+      .insert(payload);
+
+    if (insErr) {
+      console.error("session insert error:", insErr);
+      alert(`세션 생성 실패: ${insErr.message}`);
+      return;
+    }
+
+    // ✅ router.tsx 기준: /a/play/:sessionId , /b/play/:sessionId
+    navigate(`/${variant}/play/${session_id}`);
   }
 
   return (
@@ -60,154 +250,85 @@ export default function ScenarioDetailPage() {
       {/* Header */}
       <div className={styles.header}>
         <button className={styles.back} onClick={() => navigate(-1)} aria-label="back">
-          ←
+          <img src="/back.svg" alt="뒤로가기" />
         </button>
       </div>
 
+      {loading && <div className={styles.helper}>불러오는 중…</div>}
+      {error && <div className={styles.error}>에러: {error}</div>}
+
       {/* Top */}
       <div className={styles.top}>
-        <img className={styles.heroImg} src="/scenario.png" alt="scenario" />
-
-        <span className={styles.pill}>{scenario.category}</span>
-
-        <h1 className={styles.title}>{scenario.title}</h1>
-        <p className={styles.sub}>{scenario.packageName}</p>
+        <img className={styles.heroImg} src={heroImg} alt="scenario thumbnail" />
+        <span className={styles.pill}>{categoryName || "카테고리"}</span>
+        <h1 className={styles.title}>{scenario?.title ?? "시나리오명"}</h1>
+        <p className={styles.sub}>{pkg?.title ?? "패키지명"}</p>
       </div>
 
-      {/* Section: 시나리오 설명 */}
+      {/* 시나리오 설명 */}
       <div className={styles.section}>
         <div className={styles.sectionPill}>시나리오 설명</div>
         <div className={styles.card}>
-          <p className={styles.cardText}>{scenario.description}</p>
+          <p className={styles.cardText}>{scenario?.scenario_desc ?? ""}</p>
         </div>
       </div>
 
-      {/* Section: 대화설정 */}
-      <div className={styles.section}>
-        <div className={styles.sectionPill}>대화설정</div>
-
-        <div className={styles.settingsCard} role="button" tabIndex={0} onClick={openSettings}>
-          <div className={styles.settingsRow}>
-            <span className={styles.settingsLabel}>교정모드</span>
-            <span className={styles.settingsValue}>{correctionLabel}</span>
+      {/* A: 예시 문장 */}
+      {!isB && (
+        <div className={styles.section}>
+          <div className={styles.sectionPill}>예시 문장</div>
+          <div className={styles.card}>
+            {examples.length === 0 && <div className={styles.empty}>예시 문장이 없습니다.</div>}
+            {examples.map((ex, idx) => (
+              <div key={ex.example_id} className={styles.exampleRow}>
+                <div className={styles.exampleEn}>{ex.text_en}</div>
+                <div className={styles.exampleKo}>{ex.text_ko ?? ""}</div>
+                {idx !== examples.length - 1 && <div className={styles.exampleDivider} />}
+              </div>
+            ))}
           </div>
-
-          <div className={styles.divider} />
-
-          <div className={styles.settingsRow}>
-            <span className={styles.settingsLabel}>난이도 조절</span>
-            <span className={styles.settingsValue}>{difficultyLabel}</span>
-          </div>
-
-          <div className={styles.divider} />
-
-          <div className={styles.settingsRow}>
-            <span className={styles.settingsLabel}>질문 속도 조절</span>
-            <span className={styles.settingsValue}>{speed.toFixed(1)}</span>
-          </div>
-
-          <div className={styles.chev}>›</div>
         </div>
-      </div>
+      )}
 
-      {/* Section: 예시 문장 */}
-      <div className={styles.section}>
-        <div className={styles.sectionPill}>예시 문장</div>
-        <div className={styles.card}>
-          {scenario.examples.map((ex, idx) => (
-            <div key={idx} className={styles.exampleRow}>
-              <div className={styles.exampleEn}>{ex.en}</div>
-              <div className={styles.exampleKo}>{ex.ko}</div>
-              {idx !== scenario.examples.length - 1 && <div className={styles.exampleDivider} />}
-            </div>
-          ))}
+      {/* B: 대화 목적 */}
+      {isB && (
+        <div className={styles.section}>
+          <div className={styles.sectionPill}>대화 목적</div>
+          <div className={styles.card}>
+            {goals.length === 0 && <div className={styles.empty}>대화 목적이 없습니다.</div>}
+
+            {goals.map((g, idx) => (
+              <div key={g.goal_id} className={styles.goalRow}>
+                {/* ✅ 비활성 체크 아이콘 */}
+                <img src="/check_dis.svg" className={styles.goalCheck} alt="" />
+                <span className={styles.goalText}>{g.goal_text}</span>
+                {idx !== goals.length - 1 && <div className={styles.exampleDivider} />}
+              </div>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* Notice */}
+      {/* 안내사항 */}
       <div className={styles.notice}>
-        <div className={styles.noticeTitle}>{scenario.noticeTitle}</div>
-        <div className={styles.noticeBody}>{scenario.noticeBody}</div>
+        {notice.map((sec) => (
+          <div key={sec.title} className={styles.noticeBlock}>
+            <div className={styles.noticeTitle}>{sec.title}</div>
+            {sec.bullets.map((b, i) => (
+              <div key={`${sec.title}-${i}`} className={styles.noticeBody}>
+                - {b}
+              </div>
+            ))}
+          </div>
+        ))}
       </div>
 
       {/* Bottom CTA */}
       <div className={styles.bottomBar}>
-        <button className={styles.cta} onClick={start}>
+        <button className={styles.cta} onClick={startSession} disabled={loading || !!error || !scenario}>
           시작하기
         </button>
       </div>
-
-      {/* Bottom Sheet */}
-      {sheetOpen && (
-        <>
-          <div className={styles.backdrop} onClick={closeSettings} />
-          <div className={styles.sheet} role="dialog" aria-modal="true">
-            <div className={styles.sheetHandle} />
-
-            <h2 className={styles.sheetTitle}>대화설정</h2>
-
-            <div className={styles.sheetBlock}>
-              <div className={styles.sheetLabel}>교정모드</div>
-              <div className={styles.chips}>
-                <button
-                  type="button"
-                  className={`${styles.chip} ${correctionMode === "correct" ? styles.chipActive : ""}`}
-                  onClick={() => setCorrectionMode("correct")}
-                >
-                  교정 하기
-                </button>
-                <button
-                  type="button"
-                  className={`${styles.chip} ${correctionMode === "suggest" ? styles.chipActive : ""}`}
-                  onClick={() => setCorrectionMode("suggest")}
-                >
-                  새로운 제안
-                </button>
-              </div>
-            </div>
-
-            <div className={styles.sheetBlock}>
-              <div className={styles.sheetLabel}>난이도 설정</div>
-              <div className={styles.chips}>
-                <button
-                  type="button"
-                  className={`${styles.chip} ${difficulty === "basic" ? styles.chipActive : ""}`}
-                  onClick={() => setDifficulty("basic")}
-                >
-                  Basic
-                </button>
-                <button
-                  type="button"
-                  className={`${styles.chip} ${difficulty === "intermediate" ? styles.chipActive : ""}`}
-                  onClick={() => setDifficulty("intermediate")}
-                >
-                  Intermediate
-                </button>
-              </div>
-            </div>
-
-            <div className={styles.sheetBlock}>
-              <div className={styles.sheetLabel}>질문 속도</div>
-              <div className={styles.speedRow}>
-                {[0.8, 1.0, 1.2, 1.5].map((v) => (
-                  <button
-                    key={v}
-                    type="button"
-                    className={`${styles.speedChip} ${speed === v ? styles.speedActive : ""}`}
-                    onClick={() => setSpeed(v as Speed)}
-                  >
-                    {v.toFixed(1)}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <button className={styles.sheetCta} onClick={applySettings}>
-              설정하기
-            </button>
-          </div>
-        </>
-      )}
     </div>
   );
 }

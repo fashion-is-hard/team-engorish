@@ -1,0 +1,279 @@
+/* src/pages/play/PlayPage.module.css */
+
+.container{
+  min-height:100vh;
+  background:#ffffff;
+  display:flex;
+  flex-direction:column;
+}
+
+/* Loading / Fatal */
+.loading{
+  min-height:100vh;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  flex-direction:column;
+  color:#444;
+}
+
+.smallBtn{
+  padding:10px 12px;
+  border:1px solid #ddd;
+  border-radius:10px;
+  background:#fff;
+}
+
+/* HEADER */
+.header{
+  height:64px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  position:relative;
+  background:#fff;
+  border-bottom:1px solid #eee;
+}
+
+.headerTitle{
+  font-size:18px;
+  font-weight:600;
+  color:#2B2B2B;
+}
+
+.closeBtn{
+  position:absolute;
+  right:12px;
+  top:14px;
+  width:36px;
+  height:36px;
+  border:none;
+  background:transparent;
+  font-size:28px;
+  color:#4E555E;
+  line-height:1;
+  cursor:pointer;
+}
+
+/* TIMER + PROGRESS */
+.metaRow{
+  position:relative;
+  padding:4px 16px 0;
+  height:24px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  color:#99A9BE;
+  font-size:13px;
+  font-weight:400;
+}
+
+.timer{
+  text-align:center;
+  min-width:52px;
+}
+
+.turnCount{
+  position:absolute;
+  right:16px;
+  top:0;
+  height:24px;
+  display:flex;
+  align-items:center;
+}
+
+.progressBar{
+  height:6px;
+  background:#E5E7EB;
+  margin:8px 16px 0;
+  border-radius:999px;
+  overflow:hidden;
+}
+
+.progressFill{
+  height:100%;
+  background:#C8D1DB;
+}
+
+/* ✅ B: GOAL PANEL */
+.goalPanel{
+  margin:14px 16px 0;
+  background:#99A9BE; /* 목업의 블루그레이 */
+  border-radius:10px;
+  padding:12px;
+}
+
+.goalPanelTitle{
+  font-size:14px;
+  font-weight:700;
+  color:#ffffff;
+  margin-bottom:10px;
+}
+
+.goalBox{
+  background:#ffffff;
+  border-radius:8px;
+  padding:10px 12px;
+}
+
+.goalItem{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:8px 0;
+}
+
+.goalIcon{
+  width:16px;
+  height:16px;
+  flex-shrink:0;
+}
+
+.goalText{
+  font-size:14px;
+  font-weight:500;
+  color:#4E555E;
+}
+
+/* SCENARIO DESC CARD */
+.scDescCard{
+  margin:14px 16px 0;
+  padding:14px 14px;
+  background:#D9D9D9;
+  border-radius:10px;
+  color:#4E555E;
+}
+
+.scDescTitle{
+  font-weight:600;
+  font-size:14px;
+  margin-bottom:6px;
+}
+
+.scDescBody{
+  font-size:13px;
+  font-weight:400;
+  opacity:0.95;
+}
+
+/* CHAT AREA */
+.chatArea{
+  flex:1;
+  padding:12px 16px 10px;
+  overflow:auto;
+}
+
+.aiWrap{
+  display:flex;
+  justify-content:flex-start;
+  margin-top:12px;
+}
+
+.userWrap{
+  display:flex;
+  justify-content:flex-end;
+  margin-top:12px;
+}
+
+.aiBubble{
+  max-width:72%;
+  background:#B7C3CF;
+  color:#fff;
+  border-radius:14px;
+  padding:12px 12px;
+}
+
+.userBubble{
+  max-width:72%;
+  background:#fff;
+  border:1px solid #E5E7EB;
+  color:#2B2B2B;
+  border-radius:14px;
+  padding:12px 12px;
+}
+
+.bubbleText{
+  font-size:14px;
+  line-height:1.45;
+  font-weight:400;
+}
+
+.subAction{
+  margin-top:8px;
+  font-size:12px;
+  opacity:0.85;
+}
+
+.correctionCard{
+  margin-top:10px;
+  padding:10px 12px;
+  border-radius:10px;
+  background:#ffffff;
+  border:1px solid #e9e9e9;
+}
+
+.correctionTitle{
+  font-size:11px;
+  font-weight:600;
+  color:#6b7280;
+  margin-bottom:6px;
+}
+
+.correctionBody{
+  font-size:13px;
+  color:#111827;
+  line-height:1.4;
+}
+
+.subRow{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  margin-top:8px;
+}
+
+.autoPlayHint{
+  font-size:12px;
+  color:#ffffff;
+  opacity:0.9;
+}
+
+/* MIC AREA (BOTTOM) */
+.micArea{
+  padding:18px 16px 24px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:12px;
+  background:#fff;
+}
+
+.micHint{
+  font-size:13px;
+  font-weight:400;
+  color:#4E555E;
+  text-align:center;
+}
+
+.micBtn{
+  width:84px;
+  height:84px;
+  border-radius:999px;
+  border:none;
+  background:transparent;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  cursor:pointer;
+}
+
+.micBtn:disabled{
+  opacity:0.5;
+  cursor:not-allowed;
+}
+
+.micIcon{
+  width:84px;
+  height:84px;
+  display:block;
+}

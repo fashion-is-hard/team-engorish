@@ -1,133 +1,195 @@
-.container{
-
-  width:100%;
-  height:100vh;
-
-  background:#F4F4F4;
-
-  padding:20px;
-
+.container {
+  width: 100%;
+  min-height: 100vh;
+  background: #f7f8fb; /* Background */
 }
 
-.header{
-
-  display:flex;
-  align-items:center;
-  gap:10px;
-
-  margin-bottom:30px;
-
+.topBar {
+  height: 56px;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  border-bottom: 1px solid #dcdddf;
+  background: #f7f8fb;
 }
 
-.back{
-
-  border:none;
-  background:none;
-
-  font-size:20px;
-
-  cursor:pointer;
-
+.backBtn {
+  border: none;
+  background: transparent;
+  padding: 6px;
+  border-radius: 12px;
+  cursor: pointer;
 }
 
-.header h2{
-
-  font-size:22px;
-  font-weight:600;
-
+.backBtn:hover {
+  background: rgba(220, 221, 223, 0.35);
 }
 
-.form{
-
-  display:flex;
-  flex-direction:column;
-  gap:16px;
-
+.backIcon {
+  width: 28px;
+  height: 28px;
 }
 
-.input{
-
-  height:48px;
-
-  border:1px solid #D8D8D8;
-  border-radius:8px;
-
-  padding:0 12px;
-
-  font-family:"AtoZ";
-
+.content {
+  padding: 18px 20px 28px;
+  max-width: 520px;
+  margin: 0 auto;
 }
 
-.row{
-
-  display:flex;
-  gap:12px;
-
+.title {
+  margin: 6px 0 16px;
+  font-size: 22px;
+  font-weight: 700;
+  color: #4e555e;
+  font-family: "AtoZ", system-ui, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR",
+    Arial, sans-serif;
 }
 
-.select{
-
-  flex:1;
-
-  height:48px;
-
-  border-radius:8px;
-  border:1px solid #D8D8D8;
-
-  padding:0 10px;
-
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
 }
 
-.selectFull{
-
-  height:48px;
-
-  border-radius:8px;
-  border:1px solid #D8D8D8;
-
-  padding:0 10px;
-
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
-.agree{
+.input,
+.select,
+.selectFull {
+  height: 50px;
+  border-radius: 10px;
+  border: 1px solid #dcdddf;
+  background: #ffffff;
 
-  display:flex;
-  gap:8px;
+  padding: 0 14px;
+  font-size: 14px;
+  color: #4e555e;
 
-  font-size:13px;
+  font-family: "AtoZ", system-ui, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR",
+    Arial, sans-serif;
 
-  color:#777;
-
+  outline: none;
 }
 
-.policy{
-
-  border:none;
-  background:none;
-
-  text-decoration:underline;
-
-  color:#6B7A8F;
-
-  margin-left:4px;
-
-  cursor:pointer;
-
+.select,
+.selectFull {
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, #4e555e 50%),
+    linear-gradient(135deg, #4e555e 50%, transparent 50%);
+  background-position: calc(100% - 18px) 50%, calc(100% - 12px) 50%;
+  background-size: 6px 6px, 6px 6px;
+  background-repeat: no-repeat;
+  padding-right: 36px;
 }
 
-.button{
+.input::placeholder {
+  color: #b8bbbf;
+}
 
-  margin-top:30px;
+.input:focus,
+.select:focus,
+.selectFull:focus {
+  border-color: #99a9be;
+  box-shadow: 0 0 0 3px rgba(153, 169, 190, 0.22);
+}
 
-  height:48px;
+.inputError {
+  border-color: #ff8f8f; /* Error */
+  box-shadow: none;
+}
 
-  border:none;
-  border-radius:8px;
+.row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
 
-  background:#A8A8A8;
+.helperError {
+  font-size: 12px;
+  line-height: 1.2;
+  color: #ff8f8f;
+  padding-left: 2px;
+}
 
-  color:white;
+.agree {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
 
-  font-size:15px;
+  font-size: 13px;
+  color: #4e555e;
 
+  user-select: none;
+}
+
+.checkbox {
+  margin-top: 2px;
+  width: 18px;
+  height: 18px;
+  accent-color: #4e555e;
+}
+
+.agreeText {
+  line-height: 1.35;
+}
+
+.policy {
+  border: none;
+  background: none;
+  color: #99a9be;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  margin-left: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  padding: 0;
+}
+
+.formError {
+  font-size: 13px;
+  color: #ff8f8f;
+  text-align: center;
+}
+
+.button {
+  margin-top: 6px;
+  height: 50px;
+  border: none;
+  border-radius: 10px;
+
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: filter 0.12s ease;
+}
+
+.buttonDisabled {
+  background: #b8bbbf;
+  color: #ffffff;
+  cursor: not-allowed;
+}
+
+.buttonActive {
+  background: #4e555e;
+  color: #ffffff;
+}
+
+.buttonActive:hover {
+  filter: brightness(0.97);
+}
+
+.loginLink {
+  margin-top: 4px;
+  border: none;
+  background: none;
+  color: #99a9be;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+  font-weight: 600;
+  padding: 10px 0 0;
 }

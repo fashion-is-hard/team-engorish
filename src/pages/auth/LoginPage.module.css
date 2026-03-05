@@ -1,110 +1,139 @@
-.container{
+.container {
+  width: 100%;
+  min-height: 100vh;
 
-  width:100%;
-  height:100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 
-  display:flex;
-  justify-content:center;
-  align-items:center;
-
-  background:#F4F4F4;
-
+  background: #f7f8fb; /* Design System Background */
+  padding: 20px;
 }
 
-.content{
-
-  width:90%;
-  max-width:380px;
-
+.content {
+  width: 100%;
+  max-width: 380px;
 }
 
-.title{
+.title {
+  text-align: center;
 
-  text-align:center;
+  font-size: 28px;
+  font-weight: 600;
+  margin: 0 0 40px;
 
-  font-size:28px;
-  font-weight:600;
-
-  margin-bottom:40px;
-
-  color:#444;
-
+  color: #4e555e; /* text */
+  font-family: "AtoZ", system-ui, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR",
+    Arial, sans-serif;
 }
 
-.form{
-
-  display:flex;
-  flex-direction:column;
-  gap:16px;
-
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
 }
 
-.input{
-
-  height:48px;
-
-  border-radius:8px;
-  border:1px solid #D5D5D5;
-
-  padding:0 14px;
-
-  font-size:14px;
-
-  font-family:"AtoZ";
-
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
-.input::placeholder{
+.input {
+  height: 50px;
 
-  color:#B5B5B5;
+  border-radius: 10px;
+  border: 1px solid #dcdddf; /* Primary Low */
+  background: #ffffff; /* Surface */
 
+  padding: 0 14px;
+
+  font-size: 14px;
+  font-family: "AtoZ", system-ui, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR",
+    Arial, sans-serif;
+
+  color: #4e555e;
+  outline: none;
 }
 
-.button{
-
-  margin-top:8px;
-
-  height:48px;
-
-  border:none;
-  border-radius:8px;
-
-  background:#A8A8A8;
-
-  color:white;
-
-  font-size:15px;
-  font-weight:500;
-
-  cursor:pointer;
-
+.input::placeholder {
+  color: #b8bbbf; /* Primary Medium */
 }
 
-.signup{
-
-  margin-top:40px;
-
-  text-align:center;
-
-  font-size:14px;
-
+.input:focus {
+  border-color: #99a9be; /* Primary High */
+  box-shadow: 0 0 0 3px rgba(153, 169, 190, 0.22);
 }
 
-.signup p{
-
-  margin-bottom:8px;
-
+.inputError {
+  border-color: #ff8f8f; /* Error */
+  box-shadow: none;
 }
 
-.signupBtn{
+.helperError {
+  font-size: 12px;
+  line-height: 1.2;
+  color: #ff8f8f; /* Error */
+  padding-left: 2px;
+}
 
-  border:none;
-  background:none;
+.formError {
+  margin-top: 2px;
+  font-size: 13px;
+  color: #ff8f8f;
+  text-align: center;
+}
 
-  color:#6B7A8F;
+.button {
+  margin-top: 10px;
 
-  text-decoration:underline;
+  height: 50px;
+  border: none;
+  border-radius: 10px;
 
-  cursor:pointer;
+  font-size: 15px;
+  font-weight: 600;
 
+  cursor: pointer;
+  transition: filter 0.12s ease;
+}
+
+.buttonDisabled {
+  background: #b8bbbf; /* disabled 느낌 */
+  color: #ffffff;
+  cursor: not-allowed;
+}
+
+.buttonActive {
+  background: #4e555e; /* active */
+  color: #ffffff;
+}
+
+.buttonActive:hover {
+  filter: brightness(0.97);
+}
+
+.signup {
+  margin-top: 42px;
+  text-align: center;
+  font-size: 14px;
+  color: #111827;
+  font-family: "AtoZ", system-ui, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR",
+    Arial, sans-serif;
+}
+
+.signup p {
+  margin: 0 0 8px;
+}
+
+.signupBtn {
+  border: none;
+  background: none;
+
+  color: #99a9be; /* 링크 포인트 */
+  text-decoration: underline;
+  text-underline-offset: 3px;
+
+  cursor: pointer;
+  font-weight: 600;
 }

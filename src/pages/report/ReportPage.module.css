@@ -1,0 +1,82 @@
+.container{
+  background:#F4F4F4;
+  min-height:100vh;
+  padding-bottom:24px;
+}
+
+.loading{
+  min-height:100vh;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  flex-direction:column;
+  color:#444;
+}
+
+/* header */
+.header{
+  height:56px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  position:relative;
+  background:#F4F4F4;
+  box-shadow:0 2px 8px rgba(0,0,0,0.06);
+}
+
+.back{
+  position:absolute;
+  left:12px;
+  top:50%;
+  transform:translateY(-50%);
+  border:none;
+  background:none;
+  padding:8px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+
+.back img{
+  width:22px;
+  height:22px;
+  display:block;
+}
+
+.header h1{
+  margin:0;
+  font-size:18px;
+  font-weight:900;
+  color:#2B2B2B;
+}
+
+/* titles */
+.sectionTitle{
+  margin:18px 16px 10px 16px;
+  font-size:22px;
+  font-weight:900;
+  color:#4E555E;
+}
+
+/* card */
+.card{
+  margin:0 16px 22px 16px;
+  background:#fff;
+  border-radius:12px;
+  padding:12px;
+  box-shadow:0 2px 12px rgba(0,0,0,0.10);
+}
+
+.chart{
+  width:100%;
+  height:240px;  /* 스샷 카드 비율 */
+  display:block;
+  border-radius:10px;
+}
+
+.axisHint{
+  margin-top:10px;
+  color:#99A9BE;
+  font-size:12px;
+  font-weight:700;
+}

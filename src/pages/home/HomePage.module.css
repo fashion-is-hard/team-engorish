@@ -1,114 +1,250 @@
-.container{
-
-  width:100%;
-  height:100vh;
-
-  background:#F4F4F4;
-
-  display:flex;
-  flex-direction:column;
-
+.container {
+  width: 100%;
+  min-height: 100vh;
+  background: #f7f8fb;
+  display: flex;
+  flex-direction: column;
 }
 
 /* HEADER */
+.header {
 
-.header{
-
-  height:70px;
-
-  background:#5E646E;
-
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-
-  padding:0 20px;
-
+  background: #4e555e;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding:16px 24px;
 }
 
-.logo{
-
-  color:white;
-
-  font-size:24px;
-  font-weight:600;
-
+.logo {
+  margin: 0;
+  color: #ffffff;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  font-family: "AtoZ", system-ui, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR",
+    Arial, sans-serif;
 }
 
-.icons{
-
-  display:flex;
-  gap:14px;
-
+.icons {
+  display: flex;
+  gap: 12px;
+  color: #ffffff;
 }
 
-.icon{
+.iconBtn {
+  background: transparent;
+  border: none;
+  padding: 6px;
+  border-radius: 12px;
+  cursor: pointer;
+}
 
-  background:none;
-  border:none;
+.iconBtn:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
 
-  font-size:18px;
-
-  color:white;
-
-  cursor:pointer;
-
+.iconBtn img {
+  width: 28px;
+  height: 28px;
 }
 
 /* MAIN */
-
-.main{
-
-  padding:20px;
-
+.main {
+  padding: 18px 20px 28px;
 }
 
-.card{
-
-  background:white;
-
-  border-radius:12px;
-
-  padding:16px;
-
-  box-shadow:0 2px 8px rgba(0,0,0,0.08);
-
+/* 로딩 스켈레톤 */
+.skeletonCard {
+  height: 240px;
+  border-radius: 16px;
+  background: #ffffff;
+  border: 1px solid #dcdddf;
+  box-shadow: 0 8px 24px rgba(17, 24, 39, 0.06);
+  max-width: 520px;
+  margin: 0 auto;
 }
 
-.title{
-
-  font-size:16px;
-
-  margin-bottom:10px;
-
+/* 기록 없음 카드 */
+.card {
+  background: #ffffff;
+  border: 1px solid #dcdddf;
+  border-radius: 16px;
+  padding: 14px;
+  box-shadow: 0 8px 24px rgba(17, 24, 39, 0.06);
+  max-width: 520px;
+  margin: 0 auto;
 }
 
-.image{
-
-  width:100%;
-
-  border-radius:8px;
-
-  margin-bottom:14px;
-
+.cardTitle {
+  font-size: 15px;
+  font-weight: 700;
+  color: #111827;
+  margin: 6px 4px 12px;
+  font-family: "AtoZ", system-ui, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR",
+    Arial, sans-serif;
 }
 
-.startBtn{
+.image {
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid #dcdddf;
+  display: block;
+  margin-bottom: 12px;
+}
 
-  width:100%;
+.primaryBtn {
+  width: 100%;
+  height: 52px;
+  border: none;
+  border-radius: 12px;
+  background: #4e555e;
+  color: #ffffff;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+}
 
-  height:48px;
+.primaryBtn:hover {
+  filter: brightness(0.97);
+}
 
-  border:none;
+/* 진행중 UI */
+.progressWrap {
+  max-width: 520px;
+  margin: 0 auto;
+  padding-bottom: 90px; /* 하단 고정 버튼 공간 */
+}
 
-  border-radius:8px;
+.sectionTitle {
+  margin: 6px 0 14px;
+  font-size: 22px;
+  font-weight: 800;
+  color: #4e555e;
+  font-family: "AtoZ", system-ui, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR",
+    Arial, sans-serif;
+}
 
-  background:#5E646E;
+.progressHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
 
-  color:white;
+.pkgName {
+  font-size: 16px;
+  font-weight: 800;
+  color: #4e555e;
+}
 
-  font-size:16px;
+.menuBtn {
+  border: none;
+  background: #c2cbd8;
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
 
-  cursor:pointer;
+.menuBtn img {
+  width: 22px;
+  height: 22px;
+}
 
+.progressBarRow {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 18px;
+}
+
+.progressBarTrack {
+  height: 6px;
+  border-radius: 999px;
+  background: #dcdddf;
+  overflow: hidden;
+}
+
+.progressBarFill {
+  height: 100%;
+  background: #99a9be;
+  width: 0%;
+}
+
+.progressText {
+  font-size: 13px;
+  font-weight: 700;
+  color: #99a9be;
+}
+
+/* 진행중 시나리오 카드(최소 1개) */
+.scenarioCard {
+  background: #ffffff;
+  border: 1px solid #dcdddf;
+  border-radius: 16px;
+  box-shadow: 0 8px 24px rgba(17, 24, 39, 0.06);
+  padding: 14px;
+  display: grid;
+  grid-template-columns: 96px 1fr;
+  gap: 12px;
+}
+
+.scThumb {
+  width: 96px;
+  height: 96px;
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid #dcdddf;
+}
+
+.scThumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.scBody {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 4px;
+}
+
+.scTitle {
+  font-size: 18px;
+  font-weight: 800;
+  color: #4e555e;
+}
+
+.scDesc {
+  font-size: 14px;
+  color: #99a9be;
+  line-height: 1.3;
+}
+
+/* 하단 고정 이어하기 버튼 */
+.bottomCta {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 18px;
+  width: calc(100% - 40px);
+  max-width: 520px;
+  height: 56px;
+  border: none;
+  border-radius: 14px;
+  background: #4e555e;
+  color: #ffffff;
+  font-size: 16px;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 10px 24px rgba(17, 24, 39, 0.12);
+}
+
+.bottomCta:hover {
+  filter: brightness(0.97);
 }

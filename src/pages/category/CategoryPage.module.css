@@ -1,139 +1,190 @@
-.container{
-
-  background:#F4F4F4;
-  min-height:100vh;
-
-  padding:16px;
-
+.container {
+  background: #f7f8fb; /* Background */
+  min-height: 100vh;
+  padding: 0;
+  color: #4e555e;
+  font-family: "AtoZ", system-ui, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR",
+    Arial, sans-serif;
 }
 
 /* HEADER */
-
-.header{
-
-  display:flex;
-  align-items:center;
-
-  gap:10px;
-
-  margin-bottom:20px;
-
+.header {
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  background: #f7f8fb;
+  border-bottom: 1px solid #dcdddf;
 }
 
-.header h1{
-
-  font-size:20px;
-  font-weight:600;
-
+.backBtn {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  border: none;
+  background: transparent;
+  padding: 6px;
+  border-radius: 12px;
+  cursor: pointer;
 }
 
-.back{
+.backBtn:hover {
+  background: rgba(220, 221, 223, 0.35);
+}
 
-  border:none;
-  background:none;
+.backBtn img {
+  width: 28px;
+  height: 28px;
+  display: block;
+}
 
-  font-size:20px;
-
+.headerTitle {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 800;
+  color: #4e555e;
 }
 
 /* TITLE */
-
-.sectionTitle{
-
-  font-size:22px;
-  font-weight:600;
-
-  margin-bottom:14px;
-
+.sectionTitle {
+  margin: 14px 20px 10px 20px;
+  font-size: 22px;
+  font-weight: 900;
+  color: #4e555e;
 }
 
 /* TABS */
-
-.tabs{
-
-  display:flex;
-
-  gap:8px;
-
-  margin-bottom:20px;
-
+.tabs {
+  margin: 0 20px 14px 20px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
-.tab{
-
-  padding:6px 12px;
-
-  border-radius:16px;
-
-  border:1px solid #D8D8D8;
-
-  background:white;
-
-  font-size:13px;
-
+.tab {
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 10px;
+  border: 1px solid #dcdddf;
+  background: #ffffff;
+  font-size: 13px;
+  font-weight: 800;
+  color: #b8bbbf; /* Primary Medium */
+  cursor: pointer;
 }
 
-.active{
+.tabActive {
+  background: #99a9be; /* Secondary High */
+  color: #ffffff;
+  border-color: transparent;
+}
 
-  background:#5E646E;
-
-  color:white;
-
-  border:none;
-
+/* helper/error */
+.helper {
+  margin: 0 20px 10px 20px;
+  color: #6b7280;
+  font-size: 13px;
+}
+.error {
+  margin: 0 20px 10px 20px;
+  color: #ff8f8f;
+  font-size: 13px;
 }
 
 /* GRID */
-
-.grid{
-
-  display:grid;
-
-  grid-template-columns:1fr 1fr;
-
-  gap:16px;
-
+.grid {
+  margin: 0 20px 28px 20px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
 }
 
-/* CARD */
-
-.card{
-
-  background:white;
-
-  border-radius:12px;
-
-  padding:12px;
-
-  box-shadow:0 2px 8px rgba(0,0,0,0.08);
-
+/* CARD (button) */
+.card {
+  text-align: left;
+  background: #ffffff;
+  border: 1px solid #dcdddf;
+  border-radius: 16px;
+  padding: 12px;
+  box-shadow: 0 8px 24px rgba(17, 24, 39, 0.06);
+  cursor: pointer;
 }
 
-.image{
-
-  width:100%;
-
-  border-radius:8px;
-
-  margin-bottom:8px;
-
+.card:hover {
+  filter: brightness(0.99);
 }
 
+.image {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  border-radius: 14px;
+  display: block;
+  background: #e9eef6;
+  border: 1px solid #dcdddf;
+}
+
+/* badge base */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  margin-top: 10px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 900;
+  color: #ffffff;
+}
+
+/* 상태별 뱃지 컬러(디자인 시스템) */
+.badgeNotStarted {
+  background: #dcdddf; /* Primary Low */
+  color: #4e555e;
+}
+
+.badgeProgress {
+  background: #99a9be; /* Secondary High */
+  color: #ffffff;
+}
+
+.badgeDone {
+  background: #4e555e; /* Primary */
+  color: #ffffff;
+}
+
+.name {
+  margin: 10px 0 0 0;
+  font-size: 16px;
+  font-weight: 900;
+  color: #4e555e;
+}
+
+/* skeleton */
+.skeletonCard {
+  height: 230px;
+  border-radius: 16px;
+  background: #ffffff;
+  border: 1px solid #dcdddf;
+  box-shadow: 0 8px 24px rgba(17, 24, 39, 0.06);
+}
+
+/* 기존 badge 기본 유지 */
 .badge{
-
+  display:inline-flex;
+  align-items:center;
+  height:20px;
+  margin-top:10px;
+  padding:0 10px;
+  border-radius:999px;
   font-size:12px;
-
-  background:#D8D8D8;
-
-  padding:3px 8px;
-
-  border-radius:10px;
-
+  font-weight:700;
+  color:#FFFFFF;
 }
 
-.name{
-
-  font-size:14px;
-  margin-top:6px;
-
-}
+/* ✅ 상태별 색 */
+.badgeClear{ background:#4E555E; }      /* 진한 회색 */
+.badgeProgress{ background:#99A9BE; }   /* 브랜드(Secondary High) */
+.badgeNotStarted{ background:#CFCFCF; } /* 연회색 */

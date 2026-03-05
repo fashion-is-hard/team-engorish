@@ -1,0 +1,56 @@
+import { useMemo } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
+import styles from "./NotFoundPage.module.css";
+
+function detectVariant(pathname: string): "a" | "b" {
+  // /a/... or /b/... 형태면 그대로 유지, 아니면 a로 기본
+  const seg = pathname.split("/").filter(Boolean)[0];
+  return seg === "b" ? "b" : "a";
+}
+
+export default function NotFoundPage() {
+  const nav = useNavigate();
+  const loc = useLocation();
+
+  const variant = useMemo(() => detectVariant(loc.pathname), [loc.pathname]);
+
+  function goHome() {
+    nav(`/${variant}/home`, { replace: true });
+  }
+  function goLogin() {
+    nav(`/${variant}/auth/login`, { replace: true });
+  }
+
+  return (
+    <div className={styles.page}>
+      <div className={styles.card}>
+        <div className={styles.badge}>404</div>
+
+        <h1 className={styles.title}>페이지를 찾을 수 없어요</h1>
+        <p className={styles.desc}>
+          주소가 잘못되었거나, 이동된 페이지일 수 있어요.
+          <br />
+          아래 버튼으로 안전하게 돌아가요.
+        </p>
+
+        <div className={styles.actions}>
+          <button className={styles.primary} onClick={goHome}>
+            홈으로 가기
+          </button>
+          <button className={styles.secondary} onClick={() => nav(-1)}>
+            뒤로가기
+          </button>
+        </div>
+
+        <button className={styles.textLink} onClick={goLogin}>
+          로그인 화면으로 이동
+        </button>
+
+        <div className={styles.meta}>
+          <span className={styles.metaLabel}>요청 경로</span>
+          <span className={styles.metaValue}>{loc.pathname}</span>
+        </div>
+      </div>
+    </div>
+  );
+}

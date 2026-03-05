@@ -1,170 +1,292 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import type { FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import styles from "./SignupPage.module.css";
 import { supabase } from "@/lib/supabaseClient";
 
-export default function SignupPage(){
+type FieldKey = "email" | "password" | "gender" | "age" | "stage" | "agree";
 
+export default function SignupPage() {
   const navigate = useNavigate();
 
-  const [email,setEmail] = useState("");
-  const [password,setPassword] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
 
-  const [gender,setGender] = useState("");
-  const [age,setAge] = useState("");
-  const [stage,setStage] = useState("");
+  const [gender, setGender] = useState("");
+  const [age, setAge] = useState("");
+  const [stage, setStage] = useState("");
 
-  const [agree,setAgree] = useState(false);
+  const [agree, setAgree] = useState(false);
 
-  async function handleSignup(e:React.FormEvent){
-
-  e.preventDefault();
-
-  if(!agree){
-    alert("개인정보 동의가 필요합니다.");
-    return;
-  }
-
-  const { data, error } = await supabase.auth.signUp({
-
-    email: email,
-    password: password
-
+  const [touched, setTouched] = useState<Record<FieldKey, boolean>>({
+    email: false,
+    password: false,
+    gender: false,
+    age: false,
+    stage: false,
+    agree: false,
   });
 
-  if(error){
+  const [loading, setLoading] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
-    alert(error.message);
-    return;
+  const emailError = useMemo(() => {
+    if (!touched.email) return "";
+    const v = email.trim();
+    if (!v) return "이메일을 입력해 주세요";
+    if (!/^\S+@\S+\.\S+$/.test(v)) return "이메일을 올바르게 입력해 주세요";
+    return "";
+  }, [email, touched.email]);
 
-  }
+  const passwordError = useMemo(() => {
+    if (!touched.password) return "";
+    if (!password) return "비밀번호를 입력해 주세요";
+    if (password.length < 6) return "비밀번호는 6자 이상으로 입력해 주세요";
+    return "";
+  }, [password, touched.password]);
 
-  const userId = data.user?.id;
+  const genderError = useMemo(() => {
+    if (!touched.gender) return "";
+    if (!gender) return "성별을 선택해 주세요";
+    return "";
+  }, [gender, touched.gender]);
 
-  if(userId){
+  const ageError = useMemo(() => {
+    if (!touched.age) return "";
+    if (!age) return "연령대를 선택해 주세요";
+    return "";
+  }, [age, touched.age]);
 
-    await supabase
-      .from("profiles")
-      .insert({
+  const stageError = useMemo(() => {
+    if (!touched.stage) return "";
+    if (!stage) return "교환 단계(상태)를 선택해 주세요";
+    return "";
+  }, [stage, touched.stage]);
 
-        id: userId,
-        email: email,
-        gender: gender,
-        age_range: age,
-        exchange_stage: stage
+  const agreeError = useMemo(() => {
+    if (!touched.agree) return "";
+    if (!agree) return "개인정보 수집 동의가 필요합니다";
+    return "";
+  }, [agree, touched.agree]);
 
+  const canSubmit = useMemo(() => {
+    const ok =
+      email.trim() &&
+      password &&
+      gender &&
+      age &&
+      stage &&
+      agree &&
+      !emailError &&
+      !passwordError &&
+      !genderError &&
+      !ageError &&
+      !stageError &&
+      !agreeError &&
+      !loading;
+
+    return !!ok;
+  }, [
+    email,
+    password,
+    gender,
+    age,
+    stage,
+    agree,
+    emailError,
+    passwordError,
+    genderError,
+    ageError,
+    stageError,
+    agreeError,
+    loading,
+  ]);
+
+  async function handleSignup(e: FormEvent) {
+    e.preventDefault();
+    setFormError(null);
+
+    // 제출 시 에러 표시 강제
+    setTouched({
+      email: true,
+      password: true,
+      gender: true,
+      age: true,
+      stage: true,
+      agree: true,
+    });
+
+    if (!canSubmit) return;
+
+    setLoading(true);
+    try {
+      // 1) Auth 가입
+      const { data, error } = await supabase.auth.signUp({
+        email: email.trim(),
+        password,
       });
 
+      if (error || !data.user) {
+        setFormError(error?.message ?? "회원가입에 실패했습니다.");
+        return;
+      }
+
+      const userId = data.user.id;
+
+      // 2) 추가 정보는 profiles에 "업데이트"로 반영
+      //    (AB 배정/프로필 생성이 트리거로 이뤄진다면 insert는 충돌 위험)
+      //    profiles row가 아직 없을 수 있어 update가 0 rows일 수 있음 → 그 경우 insert 시도
+      const payload = {
+        id: userId,
+        email: email.trim(),
+        gender,
+        age_range: age,
+        exchange_stage: stage,
+      };
+
+      const upd = await supabase.from("profiles").update(payload).eq("id", userId);
+
+      // row가 없어서 update가 실패할 수 있음 → insert fallback
+      if (upd.error) {
+        // RLS/권한 정책에 따라 insert도 막힐 수 있음. 그 경우엔 그냥 넘어가도 됨(실험용)
+        await supabase.from("profiles").insert(payload);
+      }
+
+      alert("회원가입이 완료 되었습니다! 로그인 페이지로 이동합니다.");
+      navigate("/auth/login", { replace: true });
+    } catch (err) {
+      console.error(err);
+      setFormError("회원가입에 실패했습니다. 잠시 후 다시 시도해 주세요.");
+    } finally {
+      setLoading(false);
+    }
   }
 
-  alert("회원가입 완료");
-
-  navigate("/login");
-
-}
-
-  return(
-
+  return (
     <div className={styles.container}>
-
-      <div className={styles.header}>
-
-        <button
-          className={styles.back}
-          onClick={()=>navigate(-1)}
-        >
-          ←
+      <div className={styles.topBar}>
+        <button className={styles.backBtn} type="button" onClick={() => navigate(-1)}>
+          {/* 아이콘 시스템 쓰면: /icons/back.svg */}
+          <img className={styles.backIcon} src="/back.svg" alt="뒤로가기" />
         </button>
-
-        <h2>회원가입</h2>
-
       </div>
 
-      <form className={styles.form} onSubmit={handleSignup}>
+      <div className={styles.content}>
+        <h2 className={styles.title}>회원가입</h2>
 
-        <input
-          className={styles.input}
-          placeholder="E-mail"
-          value={email}
-          onChange={(e)=>setEmail(e.target.value)}
-        />
+        <form className={styles.form} onSubmit={handleSignup}>
+          <div className={styles.field}>
+            <input
+              className={`${styles.input} ${emailError ? styles.inputError : ""}`}
+              placeholder="E-mail"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              onBlur={() => setTouched((p) => ({ ...p, email: true }))}
+              autoComplete="email"
+              inputMode="email"
+            />
+            {emailError ? <div className={styles.helperError}>{emailError}</div> : null}
+          </div>
 
-        <input
-          className={styles.input}
-          placeholder="Password"
-          type="password"
-          value={password}
-          onChange={(e)=>setPassword(e.target.value)}
-        />
+          <div className={styles.field}>
+            <input
+              className={`${styles.input} ${passwordError ? styles.inputError : ""}`}
+              placeholder="Password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              onBlur={() => setTouched((p) => ({ ...p, password: true }))}
+              autoComplete="new-password"
+            />
+            {passwordError ? (
+              <div className={styles.helperError}>{passwordError}</div>
+            ) : null}
+          </div>
 
-        <div className={styles.row}>
+          <div className={styles.row}>
+            <div className={styles.field}>
+              <select
+                className={`${styles.select} ${genderError ? styles.inputError : ""}`}
+                value={gender}
+                onChange={(e) => setGender(e.target.value)}
+                onBlur={() => setTouched((p) => ({ ...p, gender: true }))}
+              >
+                <option value="">성별</option>
+                <option value="남성">남성</option>
+                <option value="여성">여성</option>
+              </select>
+              {genderError ? <div className={styles.helperError}>{genderError}</div> : null}
+            </div>
 
-          <select
-            className={styles.select}
-            value={gender}
-            onChange={(e)=>setGender(e.target.value)}
-          >
-            <option value="">성별</option>
-            <option>남성</option>
-            <option>여성</option>
-          </select>
+            <div className={styles.field}>
+              <select
+                className={`${styles.select} ${ageError ? styles.inputError : ""}`}
+                value={age}
+                onChange={(e) => setAge(e.target.value)}
+                onBlur={() => setTouched((p) => ({ ...p, age: true }))}
+              >
+                <option value="">연령대</option>
+                <option value="만18-만20">만18-만20</option>
+                <option value="만21-만23">만21-만23</option>
+                <option value="만24-만26">만24-만26</option>
+                <option value="만27-만29">만27-만29</option>
+                <option value="만30 이상">만30 이상</option>
+              </select>
+              {ageError ? <div className={styles.helperError}>{ageError}</div> : null}
+            </div>
+          </div>
 
-          <select
-            className={styles.select}
-            value={age}
-            onChange={(e)=>setAge(e.target.value)}
-          >
-            <option value="">연령대</option>
-            <option>18-20</option>
-            <option>21-23</option>
-            <option>24-26</option>
-            <option>27+</option>
-          </select>
-
-        </div>
-
-        <select
-          className={styles.selectFull}
-          value={stage}
-          onChange={(e)=>setStage(e.target.value)}
-        >
-          <option value="">
-            현재 교환학생 단계 중 어디인가요?
-          </option>
-          <option>출국 준비</option>
-          <option>현지 적응</option>
-          <option>수업 진행</option>
-          <option>귀국 준비</option>
-        </select>
-
-        <label className={styles.agree}>
-
-          <input
-            type="checkbox"
-            checked={agree}
-            onChange={()=>setAgree(!agree)}
-          />
-
-          <span>
-            [필수] 개인정보 수집에 동의합니다.
-            <button
-              type="button"
-              className={styles.policy}
-               onClick={()=>navigate("/privacy")}
+          <div className={styles.field}>
+            <select
+              className={`${styles.selectFull} ${stageError ? styles.inputError : ""}`}
+              value={stage}
+              onChange={(e) => setStage(e.target.value)}
+              onBlur={() => setTouched((p) => ({ ...p, stage: true }))}
             >
-              개인정보 처리방침
-            </button>
-          </span>
+              <option value="">현재 교환학생 단계 중 어디인가요?</option>
+              <option value="교환국으로 출국을 준비하고 있어요">
+                교환국으로 출국을 준비하고 있어요
+              </option>
+              <option value="교환국에서 생활중이에요">교환국에서 생활중이에요</option>
+              <option value="교환 생활을 마치고 돌아왔어요">교환 생활을 마치고 돌아왔어요</option>
+            </select>
+            {stageError ? <div className={styles.helperError}>{stageError}</div> : null}
+          </div>
 
-        </label>
+          <label className={styles.agree}>
+            {/* 체크 아이콘 써도 됨: /icons/check.svg 등 */}
+            <input
+              className={styles.checkbox}
+              type="checkbox"
+              checked={agree}
+              onChange={() => setAgree((v) => !v)}
+              onBlur={() => setTouched((p) => ({ ...p, agree: true }))}
+            />
 
-        <button className={styles.button}>
-          회원가입
-        </button>
+            <span className={styles.agreeText}>
+              [필수] 개인정보 수집에 동의합니다.
+              <button
+                type="button"
+                className={styles.policy}
+                onClick={() => navigate("/privacy")}
+              >
+                개인정보 처리방침
+              </button>
+            </span>
+          </label>
+          {agreeError ? <div className={styles.helperError}>{agreeError}</div> : null}
 
-      </form>
+          {formError ? <div className={styles.formError}>{formError}</div> : null}
 
+          <button
+            className={`${styles.button} ${canSubmit ? styles.buttonActive : styles.buttonDisabled}`}
+            disabled={!canSubmit}
+            type="submit"
+          >
+            {loading ? "가입 중..." : "회원가입"}
+          </button>
+        </form>
+      </div>
     </div>
-
   );
 }

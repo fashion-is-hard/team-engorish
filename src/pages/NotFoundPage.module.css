@@ -1,0 +1,115 @@
+.page {
+  min-height: 100vh;
+  background: #f7f8fb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.card {
+  width: 100%;
+  max-width: 420px;
+  background: #ffffff;
+  border: 1px solid #dcdddf;
+  border-radius: 20px;
+  padding: 22px 20px 18px;
+  box-shadow: 0 8px 24px rgba(17, 24, 39, 0.06);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.badge {
+  width: fit-content;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #c2cbd8;
+  color: #4e555e;
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.2px;
+}
+
+.title {
+  margin: 0;
+  font-size: 20px;
+  line-height: 1.25;
+  font-weight: 700;
+  color: #111827;
+}
+
+.desc {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.55;
+  color: #4e555e;
+}
+
+.actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.primary,
+.secondary {
+  border: 0;
+  border-radius: 14px;
+  padding: 12px 12px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.primary {
+  background: #99a9be;
+  color: #ffffff;
+}
+
+.primary:hover {
+  filter: brightness(0.97);
+}
+
+.secondary {
+  background: #dcdddf;
+  color: #4e555e;
+}
+
+.secondary:hover {
+  filter: brightness(0.97);
+}
+
+.textLink {
+  border: 0;
+  background: transparent;
+  padding: 8px 4px 2px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #4e555e;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.meta {
+  margin-top: 6px;
+  padding-top: 12px;
+  border-top: 1px solid #dcdddf;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.metaLabel {
+  font-size: 12px;
+  color: #b8bbbf;
+  font-weight: 600;
+}
+
+.metaValue {
+  font-size: 12px;
+  color: #4e555e;
+  word-break: break-all;
+}
