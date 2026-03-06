@@ -482,6 +482,26 @@ export default function PlayPage() {
     }
   }
 
+  async function connectRealtimeWithRetry(maxRetries = 3) {
+    let lastError: any = null;
+
+    for (let i = 0; i < maxRetries; i++) {
+      try {
+        await ensureRealtimeConnected();
+        return;
+      } catch (e) {
+        lastError = e;
+        console.error(`Realtime connect retry ${i + 1}/${maxRetries} failed`, e);
+
+        if (i < maxRetries - 1) {
+          await new Promise((r) => setTimeout(r, 1000 * (i + 1)));
+        }
+      }
+    }
+
+    throw lastError;
+  }
+
   useEffect(() => {
     if (!sessionId) return;
 
@@ -611,7 +631,7 @@ export default function PlayPage() {
     if (isAiSpeaking) return;
 
     try {
-      await ensureRealtimeConnected();
+      await connectRealtimeWithRetry(3);
       realtimeRef.current?.startMic();
       setPlayState("listening");
     } catch (e: any) {
