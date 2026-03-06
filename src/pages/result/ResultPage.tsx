@@ -282,7 +282,8 @@ export default function ResultPage() {
     setContinuing(false);
   }
 }
-
+void loading;
+void fatal;
   // =========================
   // ✅ A 버전: 목업 UI
   // =========================
