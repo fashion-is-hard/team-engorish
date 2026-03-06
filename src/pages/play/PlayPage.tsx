@@ -571,6 +571,8 @@ export default function PlayPage() {
   async function startListening() {
     if (playState !== "idle") return;
 
+    stopAnyAudio();
+
     const Ctor = getSpeechRecognitionCtor();
     if (!Ctor) {
       setSpeechSupported(false);
@@ -605,6 +607,7 @@ export default function PlayPage() {
 
     rec.onerror = (e) => {
       console.error("stt error", e);
+      recognitionRef.current = null; 
       setPlayState("idle");
       setInterimText("");
       finalTranscriptRef.current = "";
@@ -644,6 +647,8 @@ export default function PlayPage() {
     };
 
     rec.onend = () => {
+
+        recognitionRef.current = null; 
       const finalText = (finalTranscriptRef.current || "").trim();
 
       setInterimText("");
@@ -673,7 +678,10 @@ export default function PlayPage() {
     if (playState !== "listening") return;
     try {
       recognitionRef.current?.stop();
-    } catch {}
+    } catch {
+        recognitionRef.current = null;
+        setPlayState("idle");
+    }
   }
 
   async function handleUserUtterance(text: string) {
