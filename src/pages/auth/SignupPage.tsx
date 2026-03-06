@@ -106,7 +106,6 @@ export default function SignupPage() {
     e.preventDefault();
     setFormError(null);
 
-    // 제출 시 에러 표시 강제
     setTouched({
       email: true,
       password: true,
@@ -119,10 +118,16 @@ export default function SignupPage() {
     if (!canSubmit) return;
 
     setLoading(true);
+
     try {
-      // 1) Auth 가입
+      const normalizedEmail = email.trim().toLowerCase();
+
+      // 이메일 @ 앞부분을 display_name으로 사용
+      const displayName = normalizedEmail.split("@")[0] || normalizedEmail;
+
+      // 1) Auth 회원가입
       const { data, error } = await supabase.auth.signUp({
-        email: email.trim(),
+        email: normalizedEmail,
         password,
       });
 
@@ -133,23 +138,27 @@ export default function SignupPage() {
 
       const userId = data.user.id;
 
-      // 2) 추가 정보는 profiles에 "업데이트"로 반영
-      //    (AB 배정/프로필 생성이 트리거로 이뤄진다면 insert는 충돌 위험)
-      //    profiles row가 아직 없을 수 있어 update가 0 rows일 수 있음 → 그 경우 insert 시도
+      // 2) profiles 반영
       const payload = {
         id: userId,
-        email: email.trim(),
+        display_name: displayName,
         gender,
         age_range: age,
         exchange_stage: stage,
       };
 
+      // update 먼저 시도
       const upd = await supabase.from("profiles").update(payload).eq("id", userId);
 
-      // row가 없어서 update가 실패할 수 있음 → insert fallback
-      if (upd.error) {
-        // RLS/권한 정책에 따라 insert도 막힐 수 있음. 그 경우엔 그냥 넘어가도 됨(실험용)
-        await supabase.from("profiles").insert(payload);
+      // update 에러거나 반영 row가 없으면 upsert로 처리
+      if (upd.error || (typeof upd.count === "number" && upd.count === 0)) {
+        const { error: upsertError } = await supabase
+          .from("profiles")
+          .upsert(payload, { onConflict: "id" });
+
+        if (upsertError) {
+          console.error("profiles upsert error:", upsertError);
+        }
       }
 
       alert("회원가입이 완료 되었습니다! 로그인 페이지로 이동합니다.");
@@ -166,7 +175,6 @@ export default function SignupPage() {
     <div className={styles.container}>
       <div className={styles.topBar}>
         <button className={styles.backBtn} type="button" onClick={() => navigate(-1)}>
-          {/* 아이콘 시스템 쓰면: /icons/back.svg */}
           <img className={styles.backIcon} src="/back.svg" alt="뒤로가기" />
         </button>
       </div>
@@ -254,7 +262,6 @@ export default function SignupPage() {
           </div>
 
           <label className={styles.agree}>
-            {/* 체크 아이콘 써도 됨: /icons/check.svg 등 */}
             <input
               className={styles.checkbox}
               type="checkbox"
@@ -279,7 +286,9 @@ export default function SignupPage() {
           {formError ? <div className={styles.formError}>{formError}</div> : null}
 
           <button
-            className={`${styles.button} ${canSubmit ? styles.buttonActive : styles.buttonDisabled}`}
+            className={`${styles.button} ${
+              canSubmit ? styles.buttonActive : styles.buttonDisabled
+            }`}
             disabled={!canSubmit}
             type="submit"
           >
