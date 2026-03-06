@@ -77,7 +77,6 @@ export class RealtimeVoiceClient {
       tokenJson = { raw };
     }
 
-    // ✅ value가 있으면 성공으로 판단
     const ephemeralKey =
       tokenJson?.value ??
       tokenJson?.client_secret?.value ??
@@ -139,8 +138,6 @@ export class RealtimeVoiceClient {
     this.dc.addEventListener("open", () => {
       console.log("Realtime data channel open");
 
-      // ✅ output_modalities는 넣지 않음
-      // audio 세션이면 transcript 이벤트로 텍스트를 받는다
       const sessionUpdateEvent = {
         type: "session.update",
         session: {
