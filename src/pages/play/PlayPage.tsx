@@ -162,6 +162,7 @@ export default function PlayPage() {
   const [interimText, setInterimText] = useState<string>("");
 
   const [speechSupported, setSpeechSupported] = useState(true);
+  const [isAiSpeaking, setIsAiSpeaking] = useState(false);
 
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
@@ -269,6 +270,13 @@ export default function PlayPage() {
     return (data?.[0]?.turn_no ?? 0) + 1;
   }
 
+  function attachAudioLifecycle(a: HTMLAudioElement) {
+    a.onplay = () => setIsAiSpeaking(true);
+    a.onended = () => setIsAiSpeaking(false);
+    a.onpause = () => setIsAiSpeaking(false);
+    a.onerror = () => setIsAiSpeaking(false);
+  }
+
   function stopAnyAudio() {
     try {
       if (currentAudioRef.current) {
@@ -277,6 +285,7 @@ export default function PlayPage() {
       }
     } catch {}
     currentAudioRef.current = null;
+    setIsAiSpeaking(false);
   }
 
   async function tryAutoplay(url: string): Promise<boolean> {
@@ -285,10 +294,12 @@ export default function PlayPage() {
       const a = new Audio(url);
       a.preload = "auto";
       (a as any).playsInline = true;
+      attachAudioLifecycle(a);
       currentAudioRef.current = a;
       await a.play();
       return true;
     } catch {
+      setIsAiSpeaking(false);
       return false;
     }
   }
@@ -564,19 +575,21 @@ export default function PlayPage() {
   useEffect(() => {
     if (!isB) return;
     if (!loading && goalsDone && session?.status === "active") {
-      endSession("goals_done");
+      void endSession("goals_done");
     }
   }, [isB, loading, goalsDone, session?.status]);
 
   async function startListening() {
     if (playState !== "idle") return;
+    if (isAiSpeaking) return;
 
+    // ✅ AI 음성 재생 중이면 먼저 끄고 시작
     stopAnyAudio();
 
     const Ctor = getSpeechRecognitionCtor();
     if (!Ctor) {
       setSpeechSupported(false);
-      alert("이 브라우저에서는 음성 인식이 안정적으로 지원되지 않아요. Safari 또는 Chrome에서 다시 시도해주세요.");
+      alert("이 브라우저에서는 음성 인식이 안정적으로 지원되지 않아요. Safari에서 다시 시도해주세요.");
       return;
     }
 
@@ -601,13 +614,13 @@ export default function PlayPage() {
       startHandledRef.current = true;
       setPlayState("listening");
 
-      // ✅ 권한 팝업을 먼저 띄우기 위해 start() 이후에 오디오 unlock
+      // 권한 팝업 이후 오디오 unlock
       void unlockAudioOnce();
     };
 
     rec.onerror = (e) => {
       console.error("stt error", e);
-      recognitionRef.current = null; 
+      recognitionRef.current = null;
       setPlayState("idle");
       setInterimText("");
       finalTranscriptRef.current = "";
@@ -619,6 +632,10 @@ export default function PlayPage() {
       }
       if (err === "no-speech") {
         alert("음성이 감지되지 않았어요. 조금 더 가까이에서 또박또박 말해보세요.");
+        return;
+      }
+      if (err === "audio-capture") {
+        alert("마이크를 사용할 수 없어요. 이어폰/블루투스 연결 상태나 브라우저 권한을 확인해주세요.");
         return;
       }
 
@@ -647,8 +664,8 @@ export default function PlayPage() {
     };
 
     rec.onend = () => {
+      recognitionRef.current = null;
 
-        recognitionRef.current = null; 
       const finalText = (finalTranscriptRef.current || "").trim();
 
       setInterimText("");
@@ -665,10 +682,10 @@ export default function PlayPage() {
     };
 
     try {
-      // ✅ 사용자 클릭 직후 가장 먼저 start()
       rec.start();
     } catch (err) {
       console.error(err);
+      recognitionRef.current = null;
       alert("음성 인식을 시작할 수 없습니다.");
       setPlayState("idle");
     }
@@ -679,8 +696,8 @@ export default function PlayPage() {
     try {
       recognitionRef.current?.stop();
     } catch {
-        recognitionRef.current = null;
-        setPlayState("idle");
+      recognitionRef.current = null;
+      setPlayState("idle");
     }
   }
 
@@ -837,6 +854,10 @@ export default function PlayPage() {
         : "이 브라우저에서는 음성 인식을 지원하지 않아요.";
     }
 
+    if (isAiSpeaking) {
+      return "AI가 말하고 있어요. 끝난 뒤에 다시 말해주세요.";
+    }
+
     if (isB) {
       if (playState === "idle") {
         return mobile ? "버튼을 누르고 한 문장씩 말해주세요" : "버튼을 누르고 대화를 시작해주세요";
@@ -857,7 +878,7 @@ export default function PlayPage() {
       return mobile ? "듣고 있어요. 말이 끝나면 자동으로 전송돼요." : "듣고 있어요. 말이 끝나면 다시 버튼을 눌러주세요.";
     }
     return "처리 중…";
-  }, [isB, hasUserStarted, playState, speechSupported]);
+  }, [isB, hasUserStarted, playState, speechSupported, isAiSpeaking]);
 
   if (loading) return <div className={styles.loading}>불러오는 중…</div>;
 
@@ -979,6 +1000,7 @@ export default function PlayPage() {
           onClick={playState === "listening" ? stopListening : startListening}
           disabled={
             !speechSupported ||
+            isAiSpeaking ||
             playState === "processing" ||
             (!isB && pairTurnsNow >= turnLimit) ||
             (isB && goalsDone)
