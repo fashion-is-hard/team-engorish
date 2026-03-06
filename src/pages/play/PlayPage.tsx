@@ -1,4 +1,3 @@
-// src/pages/play/PlayPage.tsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
@@ -163,6 +162,7 @@ export default function PlayPage() {
 
   const [speechSupported, setSpeechSupported] = useState(true);
   const [isAiSpeaking, setIsAiSpeaking] = useState(false);
+  const [isAiVoicePending, setIsAiVoicePending] = useState(false);
 
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
@@ -404,7 +404,7 @@ export default function PlayPage() {
     return json as { achieved_goal_ids: string[] };
   }
 
-  async function generateAiReplyWithEdge(userText: string) {
+  async function generateAiTextWithEdge(userText: string) {
     const payload = {
       sessionId,
       userText,
@@ -421,7 +421,7 @@ export default function PlayPage() {
     const accessToken = sess.session?.access_token;
 
     const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
-    const fnUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`;
+    const fnUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat_text`;
 
     const res = await fetch(fnUrl, {
       method: "POST",
@@ -442,12 +442,49 @@ export default function PlayPage() {
     }
 
     if (!res.ok) {
-      throw new Error(`chat ${res.status}: ${JSON.stringify(json)}`);
+      throw new Error(`chat_text ${res.status}: ${JSON.stringify(json)}`);
     }
 
     return json as {
       ai_text: string;
       correction: string | null;
+    };
+  }
+
+  async function generateTtsWithEdge(text: string) {
+    const { data: sess } = await supabase.auth.getSession();
+    const accessToken = sess.session?.access_token;
+
+    const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
+    const fnUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat_tts`;
+
+    const res = await fetch(fnUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: anonKey,
+        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+      },
+      body: JSON.stringify({
+        sessionId,
+        text,
+        voice: "alloy",
+      }),
+    });
+
+    const raw = await res.text();
+    let json: any = null;
+    try {
+      json = JSON.parse(raw);
+    } catch {
+      json = { raw };
+    }
+
+    if (!res.ok) {
+      throw new Error(`chat_tts ${res.status}: ${JSON.stringify(json)}`);
+    }
+
+    return json as {
       tts_audio_url: string | null;
     };
   }
@@ -535,7 +572,7 @@ export default function PlayPage() {
         correctedText: t.text_corrected,
         translatedText: t.text_translated,
         audioUrl: t.audio_url ?? null,
-        canAutoplay: true,
+        canAutoplay: t.audio_url ? true : false,
         createdAt: new Date(t.created_at).getTime(),
       }));
       setMessages(msgs);
@@ -581,9 +618,8 @@ export default function PlayPage() {
 
   async function startListening() {
     if (playState !== "idle") return;
-    if (isAiSpeaking) return;
+    if (isAiSpeaking || isAiVoicePending) return;
 
-    // ✅ AI 음성 재생 중이면 먼저 끄고 시작
     stopAnyAudio();
 
     const Ctor = getSpeechRecognitionCtor();
@@ -613,8 +649,6 @@ export default function PlayPage() {
       if (startHandledRef.current) return;
       startHandledRef.current = true;
       setPlayState("listening");
-
-      // 권한 팝업 이후 오디오 unlock
       void unlockAudioOnce();
     };
 
@@ -751,13 +785,11 @@ export default function PlayPage() {
 
     let aiText = "Sorry, could you say that again?";
     let correction: string | null = null;
-    let ttsUrl: string | null = null;
 
     try {
-      const res = await generateAiReplyWithEdge(text);
+      const res = await generateAiTextWithEdge(text);
       aiText = res.ai_text || aiText;
       correction = res.correction ?? null;
-      ttsUrl = res.tts_audio_url ?? null;
     } catch (e: any) {
       console.error(e);
       alert(`AI 호출 실패: ${e?.message ?? "unknown error"}`);
@@ -778,7 +810,7 @@ export default function PlayPage() {
         turn_no: aiNo,
         role: "ai",
         text_raw: aiText,
-        audio_url: ttsUrl,
+        audio_url: null,
       })
       .select("turn_id,created_at")
       .single();
@@ -794,19 +826,14 @@ export default function PlayPage() {
       role: "ai",
       text: aiText,
       createdAt: new Date(aTurn.created_at).getTime(),
-      audioUrl: ttsUrl,
-      canAutoplay: true,
+      audioUrl: null,
+      canAutoplay: false,
     };
     setMessages((prev) => [...prev, newAiMsg]);
 
     const nextAiCount = (session.turn_count_ai ?? 0) + 1;
     await supabase.from("roleplay_sessions").update({ turn_count_ai: nextAiCount }).eq("session_id", sessionId);
     setSession((prev) => (prev ? { ...prev, turn_count_ai: nextAiCount } : prev));
-
-    if (ttsUrl) {
-      const ok = await tryAutoplay(ttsUrl);
-      setMessages((prev) => prev.map((m) => (m.id === newAiMsg.id ? { ...m, canAutoplay: ok } : m)));
-    }
 
     if (isB && goals.length > 0) {
       try {
@@ -833,16 +860,54 @@ export default function PlayPage() {
       }
     }
 
+    // ✅ 텍스트는 먼저 보여주고, 음성은 뒤에서 생성
+    setPlayState("idle");
+    setIsAiVoicePending(true);
+
+    let ttsUrl: string | null = null;
+    try {
+      const tts = await generateTtsWithEdge(aiText);
+      ttsUrl = tts.tts_audio_url ?? null;
+    } catch (e) {
+      console.error("tts failed", e);
+    }
+
+    if (ttsUrl) {
+      await supabase.from("roleplay_turns").update({ audio_url: ttsUrl }).eq("turn_id", aTurn.turn_id);
+
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === newAiMsg.id
+            ? {
+                ...m,
+                audioUrl: ttsUrl,
+              }
+            : m
+        )
+      );
+
+      const ok = await tryAutoplay(ttsUrl);
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === newAiMsg.id
+            ? {
+                ...m,
+                audioUrl: ttsUrl,
+                canAutoplay: ok,
+              }
+            : m
+        )
+      );
+    }
+
+    setIsAiVoicePending(false);
+
     if (!isB) {
       const nextPairTurns = Math.min(nextUserCount, nextAiCount);
       if (nextPairTurns >= turnLimit) {
-        setPlayState("idle");
         await endSession("turn_limit");
-        return;
       }
     }
-
-    setPlayState("idle");
   }
 
   const micLabel = useMemo(() => {
@@ -852,6 +917,10 @@ export default function PlayPage() {
       return isIOS()
         ? "이 기기에서는 음성 인식이 불안정할 수 있어요. Safari에서 다시 시도해주세요."
         : "이 브라우저에서는 음성 인식을 지원하지 않아요.";
+    }
+
+    if (isAiVoicePending) {
+      return "AI 음성을 준비 중이에요.";
     }
 
     if (isAiSpeaking) {
@@ -878,7 +947,7 @@ export default function PlayPage() {
       return mobile ? "듣고 있어요. 말이 끝나면 자동으로 전송돼요." : "듣고 있어요. 말이 끝나면 다시 버튼을 눌러주세요.";
     }
     return "처리 중…";
-  }, [isB, hasUserStarted, playState, speechSupported, isAiSpeaking]);
+  }, [isB, hasUserStarted, playState, speechSupported, isAiSpeaking, isAiVoicePending]);
 
   if (loading) return <div className={styles.loading}>불러오는 중…</div>;
 
@@ -1001,6 +1070,7 @@ export default function PlayPage() {
           disabled={
             !speechSupported ||
             isAiSpeaking ||
+            isAiVoicePending ||
             playState === "processing" ||
             (!isB && pairTurnsNow >= turnLimit) ||
             (isB && goalsDone)
