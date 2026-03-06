@@ -135,6 +135,10 @@ export default function PlayPage() {
   const endingRef = useRef(false);
   const lastUserTextRef = useRef<string>("");
   const sessionRef = useRef<SessionRow | null>(null);
+  const scenarioRef = useRef<ScenarioRow | null>(null);
+  const goalsRef = useRef<ScenarioGoalRow[]>([]);
+  const isBRef = useRef(false);
+  const turnLimitRef = useRef(20);
 
   const variant: VariantPath = normalizeVariant(session?.variant ?? pathVariant);
   const isB = variant === "b";
@@ -167,6 +171,22 @@ export default function PlayPage() {
   useEffect(() => {
     sessionRef.current = session;
   }, [session]);
+
+  useEffect(() => {
+    scenarioRef.current = scenario;
+  }, [scenario]);
+
+  useEffect(() => {
+    goalsRef.current = goals;
+  }, [goals]);
+
+  useEffect(() => {
+    isBRef.current = isB;
+  }, [isB]);
+
+  useEffect(() => {
+    turnLimitRef.current = turnLimit;
+  }, [turnLimit]);
 
   useEffect(() => {
     const t = setInterval(() => {
@@ -284,6 +304,131 @@ export default function PlayPage() {
     return json as { achieved_goal_ids: string[] };
   }
 
+  async function handleRealtimeEvent(event: any) {
+    const userText = extractRealtimeUserText(event);
+
+    if (userText && sessionId) {
+      lastUserTextRef.current = userText;
+      setHasUserStarted(true);
+
+      const userNo = await getNextTurnNo();
+      const { data: uTurn, error: uErr } = await supabase
+        .from("roleplay_turns")
+        .insert({
+          session_id: sessionId,
+          turn_no: userNo,
+          role: "user",
+          text_raw: userText,
+        })
+        .select("turn_id,created_at")
+        .single();
+
+      if (!uErr && uTurn) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: uTurn.turn_id,
+            role: "user",
+            text: userText,
+            createdAt: new Date(uTurn.created_at).getTime(),
+          },
+        ]);
+      }
+
+      const currentSession = sessionRef.current;
+      const nextUserCount = (currentSession?.turn_count_user ?? 0) + 1;
+
+      await supabase
+        .from("roleplay_sessions")
+        .update({ turn_count_user: nextUserCount })
+        .eq("session_id", sessionId);
+
+      setSession((prev) => (prev ? { ...prev, turn_count_user: nextUserCount } : prev));
+    }
+
+    const aiText = extractRealtimeAssistantText(event);
+
+    if (aiText && sessionId) {
+      const aiNo = await getNextTurnNo();
+      const { data: aTurn, error: aErr } = await supabase
+        .from("roleplay_turns")
+        .insert({
+          session_id: sessionId,
+          turn_no: aiNo,
+          role: "ai",
+          text_raw: aiText,
+        })
+        .select("turn_id,created_at")
+        .single();
+
+      if (!aErr && aTurn) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: aTurn.turn_id,
+            role: "ai",
+            text: aiText,
+            createdAt: new Date(aTurn.created_at).getTime(),
+          },
+        ]);
+      }
+
+      const currentSession = sessionRef.current;
+      const nextAiCount = (currentSession?.turn_count_ai ?? 0) + 1;
+
+      await supabase
+        .from("roleplay_sessions")
+        .update({ turn_count_ai: nextAiCount })
+        .eq("session_id", sessionId);
+
+      setSession((prev) => (prev ? { ...prev, turn_count_ai: nextAiCount } : prev));
+
+      if (
+        isBRef.current &&
+        goalsRef.current.length > 0 &&
+        lastUserTextRef.current &&
+        scenarioRef.current?.scenario_id
+      ) {
+        try {
+          const out = await checkGoalsWithEdge({
+            sessionId,
+            scenarioId: scenarioRef.current.scenario_id,
+            userText: lastUserTextRef.current,
+            aiText,
+            goals: goalsRef.current,
+          });
+
+          const achieved = Array.isArray(out?.achieved_goal_ids) ? out.achieved_goal_ids : [];
+          if (achieved.length > 0) {
+            setCheckedGoalIds((prev) => {
+              const next = { ...prev };
+              achieved.forEach((id) => {
+                next[id] = true;
+              });
+              return next;
+            });
+          }
+        } catch (e) {
+          console.error("goal_check failed", e);
+        }
+      }
+
+      if (!isBRef.current) {
+        const latestSession = sessionRef.current;
+        const nextPairTurns = Math.min(
+          latestSession?.turn_count_user ?? 0,
+          (latestSession?.turn_count_ai ?? 0) + 1
+        );
+
+        if (nextPairTurns >= turnLimitRef.current) {
+          void endSession("turn_limit");
+        }
+      }
+
+      setPlayState("idle");
+    }
+  }
+
   async function ensureRealtimeConnected() {
     if (realtimeRef.current?.isConnected()) return;
     if (!scenario) throw new Error("scenario not loaded");
@@ -325,116 +470,7 @@ export default function PlayPage() {
         console.error(message);
       },
       onEvent: async (event) => {
-        const userText = extractRealtimeUserText(event);
-        if (userText && sessionId) {
-          lastUserTextRef.current = userText;
-          setHasUserStarted(true);
-
-          const userNo = await getNextTurnNo();
-          const { data: uTurn, error: uErr } = await supabase
-            .from("roleplay_turns")
-            .insert({
-              session_id: sessionId,
-              turn_no: userNo,
-              role: "user",
-              text_raw: userText,
-            })
-            .select("turn_id,created_at")
-            .single();
-
-          if (!uErr && uTurn) {
-            setMessages((prev) => [
-              ...prev,
-              {
-                id: uTurn.turn_id,
-                role: "user",
-                text: userText,
-                createdAt: new Date(uTurn.created_at).getTime(),
-              },
-            ]);
-          }
-
-          const currentSession = sessionRef.current;
-          const nextUserCount = (currentSession?.turn_count_user ?? 0) + 1;
-          await supabase
-            .from("roleplay_sessions")
-            .update({ turn_count_user: nextUserCount })
-            .eq("session_id", sessionId);
-
-          setSession((prev) => (prev ? { ...prev, turn_count_user: nextUserCount } : prev));
-        }
-
-        const aiText = extractRealtimeAssistantText(event);
-        if (aiText && sessionId) {
-          const aiNo = await getNextTurnNo();
-          const { data: aTurn, error: aErr } = await supabase
-            .from("roleplay_turns")
-            .insert({
-              session_id: sessionId,
-              turn_no: aiNo,
-              role: "ai",
-              text_raw: aiText,
-            })
-            .select("turn_id,created_at")
-            .single();
-
-          if (!aErr && aTurn) {
-            setMessages((prev) => [
-              ...prev,
-              {
-                id: aTurn.turn_id,
-                role: "ai",
-                text: aiText,
-                createdAt: new Date(aTurn.created_at).getTime(),
-              },
-            ]);
-          }
-
-          const currentSession = sessionRef.current;
-          const nextAiCount = (currentSession?.turn_count_ai ?? 0) + 1;
-          await supabase
-            .from("roleplay_sessions")
-            .update({ turn_count_ai: nextAiCount })
-            .eq("session_id", sessionId);
-
-          setSession((prev) => (prev ? { ...prev, turn_count_ai: nextAiCount } : prev));
-
-          if (isB && goals.length > 0 && lastUserTextRef.current) {
-            try {
-              const out = await checkGoalsWithEdge({
-                sessionId,
-                scenarioId: scenario.scenario_id,
-                userText: lastUserTextRef.current,
-                aiText,
-                goals,
-              });
-
-              const achieved = Array.isArray(out?.achieved_goal_ids) ? out.achieved_goal_ids : [];
-              if (achieved.length > 0) {
-                setCheckedGoalIds((prev) => {
-                  const next = { ...prev };
-                  achieved.forEach((id) => {
-                    next[id] = true;
-                  });
-                  return next;
-                });
-              }
-            } catch (e) {
-              console.error("goal_check failed", e);
-            }
-          }
-
-          if (!isB) {
-            const latestSession = sessionRef.current;
-            const nextPairTurns = Math.min(
-              latestSession?.turn_count_user ?? 0,
-              (latestSession?.turn_count_ai ?? 0) + 1
-            );
-            if (nextPairTurns >= turnLimit) {
-              void endSession("turn_limit");
-            }
-          }
-        }
+        await handleRealtimeEvent(event);
       },
     });
 
