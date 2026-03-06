@@ -308,3 +308,67 @@
   font-weight:800;
   cursor:pointer;
 }
+/* =========================
+   A version result UI
+   ========================= */
+
+.aIconWrap{
+  margin-top: 168px;
+  display:flex;
+  justify-content:center;
+}
+
+.aTitle{
+  margin-top: 28px;
+  text-align:center;
+  font-size: 28px;
+  font-weight: 800;
+  color:#111111;
+}
+
+.aSubtitle{
+  margin-top: 14px;
+  text-align:center;
+  font-size: 16px;
+  font-weight: 600;
+  color:#111111;
+}
+
+.aStatsRow{
+  margin: 26px auto 0;
+  width: 100%;
+  max-width: 460px;
+  display:flex;
+  gap:18px;
+  justify-content:center;
+}
+
+.aStatCard{
+  flex:1;
+  background:#AAB7C9;
+  border-radius: 12px;
+  padding: 12px 12px 14px;
+}
+
+.aStatLabel{
+  text-align:center;
+  color:#FFFFFF;
+  font-size: 15px;
+  font-weight: 800;
+  margin-bottom: 12px;
+}
+
+.aStatValueBox{
+  background:#FFFFFF;
+  border-radius: 8px;
+  min-height: 84px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+
+.aStatValue{
+  font-size: 28px;
+  font-weight: 800;
+  color:#4E555E;
+}

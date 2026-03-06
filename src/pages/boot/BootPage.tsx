@@ -53,7 +53,7 @@ export default function BootPage() {
     };
 
     // 로고 잠깐 보여주고 이동(원치 않으면 0으로)
-    const t = setTimeout(run, 300);
+    const t = setTimeout(run, 1800);
 
     return () => {
       cancelled = true;
