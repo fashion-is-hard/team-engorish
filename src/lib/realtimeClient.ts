@@ -68,7 +68,7 @@ export class RealtimeVoiceClient {
     });
 
     const raw = await tokenRes.text();
-    console.log("realtime_session raw:", raw);
+    console.log("realtime_session raw:", raw, "status:", tokenRes.status);
 
     let tokenJson: any = null;
     try {
@@ -77,7 +77,13 @@ export class RealtimeVoiceClient {
       tokenJson = { raw };
     }
 
-    if (!tokenRes.ok || !tokenJson?.value) {
+    // ✅ value가 있으면 성공으로 판단
+    const ephemeralKey =
+      tokenJson?.value ??
+      tokenJson?.client_secret?.value ??
+      null;
+
+    if (!ephemeralKey) {
       const detail =
         tokenJson?.detail ??
         tokenJson?.error ??
@@ -85,8 +91,6 @@ export class RealtimeVoiceClient {
         "Failed to get realtime token";
       throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
     }
-
-    const ephemeralKey = tokenJson.value;
 
     const pc = new RTCPeerConnection();
     this.pc = pc;
@@ -108,6 +112,7 @@ export class RealtimeVoiceClient {
     audioEl.onerror = () => this.opts.onRemoteAudioStop?.();
 
     pc.onconnectionstatechange = () => {
+      console.log("pc.connectionState:", pc.connectionState);
       if (pc.connectionState === "failed") {
         this.emitError("WebRTC connection failed");
       }
@@ -117,6 +122,7 @@ export class RealtimeVoiceClient {
     };
 
     pc.oniceconnectionstatechange = () => {
+      console.log("pc.iceConnectionState:", pc.iceConnectionState);
       if (pc.iceConnectionState === "failed") {
         this.emitError("ICE connection failed");
       }
@@ -131,10 +137,13 @@ export class RealtimeVoiceClient {
     this.dc = pc.createDataChannel("oai-events");
 
     this.dc.addEventListener("open", () => {
+      console.log("Realtime data channel open");
+
+      // ✅ output_modalities는 넣지 않음
+      // audio 세션이면 transcript 이벤트로 텍스트를 받는다
       const sessionUpdateEvent = {
         type: "session.update",
         session: {
-          type: "realtime",
           instructions:
             typeof this.opts.sessionPayload?.instructions === "string"
               ? this.opts.sessionPayload.instructions
@@ -147,12 +156,13 @@ export class RealtimeVoiceClient {
               },
             },
             output: {
-              voice: this.opts.sessionPayload?.voice ?? "marin",
+              voice: this.opts.sessionPayload?.voice ?? "alloy",
             },
           },
         },
       };
 
+      console.log("sending session.update", sessionUpdateEvent);
       this.sendEvent(sessionUpdateEvent);
     });
 
@@ -174,9 +184,14 @@ export class RealtimeVoiceClient {
     await pc.setLocalDescription(offer);
     await waitForIceGatheringComplete(pc);
 
+    const sdp = pc.localDescription?.sdp;
+    if (!sdp) {
+      throw new Error("Missing local SDP offer");
+    }
+
     const sdpRes = await fetch("https://api.openai.com/v1/realtime/calls", {
       method: "POST",
-      body: pc.localDescription?.sdp,
+      body: sdp,
       headers: {
         Authorization: `Bearer ${ephemeralKey}`,
         "Content-Type": "application/sdp",
@@ -184,6 +199,7 @@ export class RealtimeVoiceClient {
     });
 
     const answerSdp = await sdpRes.text();
+    console.log("realtime calls status:", sdpRes.status);
 
     if (!sdpRes.ok) {
       throw new Error(answerSdp || "Failed to connect realtime call");
