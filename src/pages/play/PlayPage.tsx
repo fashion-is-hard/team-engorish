@@ -134,6 +134,7 @@ export default function PlayPage() {
   const realtimeRef = useRef<RealtimeVoiceClient | null>(null);
   const endingRef = useRef(false);
   const lastUserTextRef = useRef<string>("");
+  const sessionRef = useRef<SessionRow | null>(null);
 
   const variant: VariantPath = normalizeVariant(session?.variant ?? pathVariant);
   const isB = variant === "b";
@@ -162,6 +163,10 @@ export default function PlayPage() {
     () => goals.filter((g) => checkedGoalIds[g.goal_id]).length,
     [goals, checkedGoalIds]
   );
+
+  useEffect(() => {
+    sessionRef.current = session;
+  }, [session]);
 
   useEffect(() => {
     const t = setInterval(() => {
@@ -203,7 +208,6 @@ export default function PlayPage() {
 
     realtimeRef.current?.stopMic();
 
-    // AI 말 끝까지 대기
     if (reason !== "user_exit") {
       const started = Date.now();
       while (isAiSpeaking && Date.now() - started < 15000) {
@@ -282,14 +286,21 @@ export default function PlayPage() {
 
   async function ensureRealtimeConnected() {
     if (realtimeRef.current?.isConnected()) return;
-
     if (!scenario) throw new Error("scenario not loaded");
 
     setConnecting(true);
 
+    const { data: authSess } = await supabase.auth.getSession();
+    const accessToken = authSess.session?.access_token;
+    const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
+
     const client = new RealtimeVoiceClient({
       tokenEndpoint: `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/realtime_session`,
-            sessionPayload: {
+      tokenHeaders: {
+        apikey: anonKey,
+        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+      },
+      sessionPayload: {
         voice: "marin",
         instructions: [
           "You are roleplaying as an NPC in an English conversation training app.",
@@ -343,8 +354,13 @@ export default function PlayPage() {
             ]);
           }
 
-          const nextUserCount = (session?.turn_count_user ?? 0) + 1;
-          await supabase.from("roleplay_sessions").update({ turn_count_user: nextUserCount }).eq("session_id", sessionId);
+          const currentSession = sessionRef.current;
+          const nextUserCount = (currentSession?.turn_count_user ?? 0) + 1;
+          await supabase
+            .from("roleplay_sessions")
+            .update({ turn_count_user: nextUserCount })
+            .eq("session_id", sessionId);
+
           setSession((prev) => (prev ? { ...prev, turn_count_user: nextUserCount } : prev));
         }
 
@@ -374,8 +390,13 @@ export default function PlayPage() {
             ]);
           }
 
-          const nextAiCount = (session?.turn_count_ai ?? 0) + 1;
-          await supabase.from("roleplay_sessions").update({ turn_count_ai: nextAiCount }).eq("session_id", sessionId);
+          const currentSession = sessionRef.current;
+          const nextAiCount = (currentSession?.turn_count_ai ?? 0) + 1;
+          await supabase
+            .from("roleplay_sessions")
+            .update({ turn_count_ai: nextAiCount })
+            .eq("session_id", sessionId);
+
           setSession((prev) => (prev ? { ...prev, turn_count_ai: nextAiCount } : prev));
 
           if (isB && goals.length > 0 && lastUserTextRef.current) {
@@ -404,9 +425,10 @@ export default function PlayPage() {
           }
 
           if (!isB) {
+            const latestSession = sessionRef.current;
             const nextPairTurns = Math.min(
-              (session?.turn_count_user ?? 0) + 1,
-              (session?.turn_count_ai ?? 0) + 1
+              latestSession?.turn_count_user ?? 0,
+              (latestSession?.turn_count_ai ?? 0) + 1
             );
             if (nextPairTurns >= turnLimit) {
               void endSession("turn_limit");
@@ -416,9 +438,12 @@ export default function PlayPage() {
       },
     });
 
-    await client.connect();
-    realtimeRef.current = client;
-    setConnecting(false);
+    try {
+      await client.connect();
+      realtimeRef.current = client;
+    } finally {
+      setConnecting(false);
+    }
   }
 
   useEffect(() => {
@@ -557,6 +582,7 @@ export default function PlayPage() {
       console.error(e);
       alert(`Realtime 연결 실패: ${e?.message ?? "unknown error"}`);
       setPlayState("idle");
+      setConnecting(false);
     }
   }
 
@@ -574,7 +600,9 @@ export default function PlayPage() {
         return "버튼을 누르고 말해주세요";
       }
       if (playState === "listening") {
-        return isIOS() ? "말이 끝나면 버튼을 다시 눌러주세요." : "듣고 있어요. 말이 끝나면 버튼을 다시 눌러주세요.";
+        return isIOS()
+          ? "말이 끝나면 버튼을 다시 눌러주세요."
+          : "듣고 있어요. 말이 끝나면 버튼을 다시 눌러주세요.";
       }
       return "응답을 기다리고 있어요";
     }

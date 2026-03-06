@@ -8,6 +8,7 @@ export type RealtimeServerEvent = {
 export type RealtimeClientOptions = {
   tokenEndpoint: string;
   sessionPayload: Record<string, any>;
+  tokenHeaders?: Record<string, string>;
   onEvent?: (event: RealtimeServerEvent) => void;
   onError?: (message: string) => void;
   onRemoteAudioStart?: () => void;
@@ -49,19 +50,40 @@ export class RealtimeVoiceClient {
     return this.connected;
   }
 
+  private emitError(message: string) {
+    console.error("[RealtimeVoiceClient]", message);
+    this.opts.onError?.(message);
+  }
+
   async connect() {
     if (this.connected) return;
 
     const tokenRes = await fetch(this.opts.tokenEndpoint, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(this.opts.tokenHeaders ?? {}),
+      },
       body: JSON.stringify(this.opts.sessionPayload),
     });
 
-    const tokenJson = await tokenRes.json();
+    const raw = await tokenRes.text();
+    console.log("realtime_session raw:", raw);
+
+    let tokenJson: any = null;
+    try {
+      tokenJson = JSON.parse(raw);
+    } catch {
+      tokenJson = { raw };
+    }
 
     if (!tokenRes.ok || !tokenJson?.value) {
-      throw new Error(tokenJson?.error ?? "Failed to get realtime token");
+      const detail =
+        tokenJson?.detail ??
+        tokenJson?.error ??
+        tokenJson?.raw ??
+        "Failed to get realtime token";
+      throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
     }
 
     const ephemeralKey = tokenJson.value;
@@ -85,6 +107,21 @@ export class RealtimeVoiceClient {
     audioEl.onended = () => this.opts.onRemoteAudioStop?.();
     audioEl.onerror = () => this.opts.onRemoteAudioStop?.();
 
+    pc.onconnectionstatechange = () => {
+      if (pc.connectionState === "failed") {
+        this.emitError("WebRTC connection failed");
+      }
+      if (pc.connectionState === "disconnected" || pc.connectionState === "closed") {
+        this.opts.onRemoteAudioStop?.();
+      }
+    };
+
+    pc.oniceconnectionstatechange = () => {
+      if (pc.iceConnectionState === "failed") {
+        this.emitError("ICE connection failed");
+      }
+    };
+
     this.localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
     this.micTrack = this.localStream.getAudioTracks()[0];
     this.micTrack.enabled = false;
@@ -92,13 +129,45 @@ export class RealtimeVoiceClient {
     pc.addTrack(this.micTrack, this.localStream);
 
     this.dc = pc.createDataChannel("oai-events");
+
+    this.dc.addEventListener("open", () => {
+      const sessionUpdateEvent = {
+        type: "session.update",
+        session: {
+          type: "realtime",
+          instructions:
+            typeof this.opts.sessionPayload?.instructions === "string"
+              ? this.opts.sessionPayload.instructions
+              : "You are a helpful voice conversation partner.",
+          audio: {
+            input: {
+              turn_detection: {
+                type: "server_vad",
+                create_response: true,
+              },
+            },
+            output: {
+              voice: this.opts.sessionPayload?.voice ?? "marin",
+            },
+          },
+        },
+      };
+
+      this.sendEvent(sessionUpdateEvent);
+    });
+
     this.dc.addEventListener("message", (e) => {
       try {
         const event = JSON.parse(e.data);
+        console.log("realtime event:", event);
         this.opts.onEvent?.(event);
-      } catch {
-        // ignore
+      } catch (err) {
+        this.emitError(`Failed to parse realtime event: ${String(err)}`);
       }
+    });
+
+    this.dc.addEventListener("error", () => {
+      this.emitError("Realtime data channel error");
     });
 
     const offer = await pc.createOffer();
@@ -124,33 +193,6 @@ export class RealtimeVoiceClient {
       type: "answer",
       sdp: answerSdp,
     });
-
-         // ✅ 세션 상세 설정은 연결 후 session.update 로 보냄
-    const sessionUpdateEvent = {
-      type: "session.update",
-      session: {
-        type: "realtime",
-        model: "gpt-realtime",
-        output_modalities: ["audio", "text"],
-        instructions:
-          typeof this.opts.sessionPayload?.instructions === "string"
-            ? this.opts.sessionPayload.instructions
-            : "You are a helpful voice conversation partner.",
-        audio: {
-          input: {
-            turn_detection: {
-              type: "server_vad",
-              create_response: true,
-            },
-          },
-          output: {
-            voice: this.opts.sessionPayload?.voice ?? "marin",
-          },
-        },
-      },
-    };
-
-    this.sendEvent(sessionUpdateEvent);
 
     this.connected = true;
   }
@@ -240,6 +282,13 @@ export function extractRealtimeAssistantText(event: RealtimeServerEvent): string
     return event.text.trim();
   }
 
+  if (
+    event?.type === "response.content_part.done" &&
+    (typeof event?.part?.transcript === "string" || typeof event?.part?.text === "string")
+  ) {
+    return String(event?.part?.transcript ?? event?.part?.text ?? "").trim() || null;
+  }
+
   return null;
 }
 
@@ -253,6 +302,21 @@ export function extractRealtimeUserText(event: RealtimeServerEvent): string | nu
 
   if (event?.type === "input_audio_buffer.transcript.done" && typeof event?.transcript === "string") {
     return event.transcript.trim();
+  }
+
+  if (
+    event?.type === "conversation.item.created" &&
+    event?.item?.role === "user" &&
+    Array.isArray(event?.item?.content)
+  ) {
+    for (const c of event.item.content) {
+      if (typeof c?.transcript === "string" && c.transcript.trim()) {
+        return c.transcript.trim();
+      }
+      if (typeof c?.text === "string" && c.text.trim()) {
+        return c.text.trim();
+      }
+    }
   }
 
   return null;
