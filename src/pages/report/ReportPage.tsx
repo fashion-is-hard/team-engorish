@@ -395,7 +395,7 @@ export default function ReportPage() {
     const avg = totals?.avg ?? { c: 0, a: 0, f: 0, p: 0, overall: 0 };
 
     const series = bData?.series ?? [];
-    const nameLabel = "00"; // 추후 프로필 이름 연결하면 교체
+    //const nameLabel = "00"; // 추후 프로필 이름 연결하면 교체
 
     const seriesC = series.map((x) => x.c);
     const seriesA = series.map((x) => x.a);

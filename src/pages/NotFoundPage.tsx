@@ -31,6 +31,18 @@ export default function NotFoundPage() {
           문제가 지속되면 rlatpgmlid@naver.com 으로 문의해주세요.
         </p>
 
+        <div className={styles.actions}>
+          <button className={styles.primary} onClick={goHome}>
+            홈으로 가기
+          </button>
+          <button className={styles.secondary} onClick={() => nav(-1)}>
+            뒤로가기 
+          </button>   
+        </div>
+
+        <button className={styles.textLink} onClick={goLogin}>
+          로그인 화면으로 이동
+        </button>
 
         <div className={styles.meta}>
           <span className={styles.metaLabel}>요청 경로</span>
