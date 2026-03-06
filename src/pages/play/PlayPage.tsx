@@ -1,12 +1,13 @@
 // src/pages/play/PlayPage.tsx
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
 import styles from "./PlayPage.module.css";
 
 type VariantPath = "a" | "b";
 function normalizeVariant(v: unknown): VariantPath {
-  return v === "b" ? "b" : "a";
+  const s = String(v ?? "").trim().toLowerCase();
+  return s === "b" ? "b" : "a";
 }
 
 type PlayState = "idle" | "listening" | "processing";
@@ -30,7 +31,7 @@ type SessionRow = {
   scenario_id: string | null;
   started_at: string;
   ended_at: string | null;
-  status: string; // active | ended ...
+  status: string;
   end_reason: string | null;
   turn_limit: number | null;
   turn_count_user: number;
@@ -76,11 +77,15 @@ type DbTurn = {
 type ScenarioGoalRow = {
   goal_id: string;
   scenario_id: string;
-  goal_text: string;
-  sort_order: number;
+  goal_title: string;
+  goal_type: string;
+  goal_definition: any;
+  success_threshold: number | null;
+  version: number | null;
+  is_active: boolean;
+  created_at: string;
 };
 
-// ---- speech typings ----
 type SpeechRecognitionLike = {
   lang: string;
   continuous: boolean;
@@ -102,6 +107,7 @@ function getSpeechRecognitionCtor(): any {
 function pad2(n: number) {
   return String(n).padStart(2, "0");
 }
+
 function mmss(sec: number) {
   const m = Math.floor(sec / 60);
   const s = sec % 60;
@@ -111,10 +117,10 @@ function mmss(sec: number) {
 export default function PlayPage() {
   const navigate = useNavigate();
   const params = useParams();
-  const variant = normalizeVariant(params.variant);
-  const sessionId = params.sessionId;
+  const location = useLocation();
 
-  const isB = variant === "b";
+  const pathVariant: VariantPath = location.pathname.startsWith("/b") ? "b" : "a";
+  const sessionId = (params as any).sessionId as string | undefined;
 
   const [loading, setLoading] = useState(true);
   const [fatal, setFatal] = useState<string | null>(null);
@@ -127,32 +133,30 @@ export default function PlayPage() {
   const [scenario, setScenario] = useState<ScenarioRow | null>(null);
   const [npc, setNpc] = useState<NpcRow | null>(null);
 
-  const [elapsedSec, setElapsedSec] = useState(0);
+  const variant: VariantPath = normalizeVariant(session?.variant ?? pathVariant);
+  const isB = variant === "b";
 
+  const [elapsedSec, setElapsedSec] = useState(0);
   const [hasUserStarted, setHasUserStarted] = useState(false);
 
-  // B goals
   const [goals, setGoals] = useState<ScenarioGoalRow[]>([]);
   const [checkedGoalIds, setCheckedGoalIds] = useState<Record<string, boolean>>({});
 
-  // STT
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const finalTranscriptRef = useRef<string>("");
   const listeningStartedAtRef = useRef<number>(0);
   const [interimText, setInterimText] = useState<string>("");
 
-  // scroll
+  const chatScrollRef = useRef<HTMLDivElement | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
-  // audio
   const audioUnlockedRef = useRef(false);
   const currentAudioRef = useRef<HTMLAudioElement | null>(null);
-
-  // 종료 중복 방지
+    const endTimerRef = useRef<number | null>(null);
   const endingRef = useRef(false);
 
-  // ====== A 턴 계산: "나+AI 왕복 1회" = 1턴 ======
   const turnLimit = useMemo(() => session?.turn_limit ?? 20, [session?.turn_limit]);
+
   const pairTurnsNow = useMemo(() => {
     const u = session?.turn_count_user ?? 0;
     const a = session?.turn_count_ai ?? 0;
@@ -160,7 +164,7 @@ export default function PlayPage() {
   }, [session?.turn_count_user, session?.turn_count_ai]);
 
   const progressRatio = useMemo(() => {
-    if (isB) return 0; // B는 턴 제한 안 씀(프로그레스바 숨길거라 의미 없음)
+    if (isB) return 0;
     return Math.min(1, pairTurnsNow / Math.max(1, turnLimit));
   }, [isB, pairTurnsNow, turnLimit]);
 
@@ -176,7 +180,6 @@ export default function PlayPage() {
     [goals, checkedGoalIds]
   );
 
-  // timer
   useEffect(() => {
     const t = setInterval(() => {
       if (session?.status === "active") setElapsedSec((v) => v + 1);
@@ -184,26 +187,61 @@ export default function PlayPage() {
     return () => clearInterval(t);
   }, [session?.status]);
 
-  // scroll
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    const el = chatScrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
   }, [messages.length, interimText]);
 
-  // cleanup
   useEffect(() => {
-    return () => {
-      try {
-        recognitionRef.current?.stop();
-      } catch {}
-      try {
-        currentAudioRef.current?.pause();
-        currentAudioRef.current = null;
-      } catch {}
+  return () => {
+    try {
+      recognitionRef.current?.stop();
+    } catch {}
+    try {
+      currentAudioRef.current?.pause();
+      currentAudioRef.current = null;
+    } catch {}
+    if (endTimerRef.current) window.clearTimeout(endTimerRef.current);
+  };
+}, []);
+
+function wait(ms: number) {
+  return new Promise<void>((resolve) => {
+    endTimerRef.current = window.setTimeout(() => resolve(), ms);
+  });
+}
+
+/** ✅ 현재 재생 중인 오디오가 있으면 끝날 때까지 기다림 (최대 maxMs) */
+async function waitForAudioEnd(maxMs = 15000) {
+  const a = currentAudioRef.current;
+  if (!a) return;
+
+  // 이미 끝났으면 패스
+  if (a.paused || a.ended) return;
+
+  await new Promise<void>((resolve) => {
+    let done = false;
+
+    const finish = () => {
+      if (done) return;
+      done = true;
+      a.removeEventListener("ended", finish);
+      a.removeEventListener("pause", finish);
+      resolve();
     };
-  }, []);
+
+    a.addEventListener("ended", finish, { once: true });
+    a.addEventListener("pause", finish, { once: true });
+
+    // 혹시 이벤트가 안 오는 케이스 방지 (네트워크 문제 등)
+    window.setTimeout(() => finish(), maxMs);
+  });
+}
 
   async function getNextTurnNo(): Promise<number> {
     if (!sessionId) return 1;
+
     const { data, error } = await supabase
       .from("roleplay_turns")
       .select("turn_no")
@@ -212,8 +250,7 @@ export default function PlayPage() {
       .limit(1);
 
     if (error) return (messages?.length ?? 0) + 1;
-    const maxNo = data?.[0]?.turn_no ?? 0;
-    return maxNo + 1;
+    return (data?.[0]?.turn_no ?? 0) + 1;
   }
 
   function stopAnyAudio() {
@@ -253,161 +290,96 @@ export default function PlayPage() {
       await a.play();
       a.pause();
       audioUnlockedRef.current = true;
-    } catch {
-      // ignore
-    }
+    } catch {}
   }
 
-  // ✅ 세션 종료(공통): DB 업데이트 후 /{variant}/result/:sessionId 이동
   async function endSession(reason: "user_exit" | "turn_limit" | "goals_done") {
-    if (!sessionId) return;
-    if (endingRef.current) return;
-    endingRef.current = true;
+  if (!sessionId) return;
+  if (endingRef.current) return;
+  endingRef.current = true;
 
+  // ✅ 유저가 종료 버튼을 누른 경우는 즉시 끊어도 되게(원하면)
+  const isUserExit = reason === "user_exit";
+
+  try {
+    // STT만 멈추고
     try {
       recognitionRef.current?.stop();
     } catch {}
-    stopAnyAudio();
 
-    try {
-      await supabase
-        .from("roleplay_sessions")
-        .update({ status: "ended", ended_at: new Date().toISOString(), end_reason: reason })
-        .eq("session_id", sessionId);
-
-      setSession((prev) =>
-        prev ? { ...prev, status: "ended", ended_at: new Date().toISOString(), end_reason: reason } : prev
-      );
-    } finally {
-      navigate(`/${variant}/result/${sessionId}`);
+    // ✅ 자동 종료(턴리밋/목표달성)면 오디오 끝까지 + 3초 기다리기
+    if (!isUserExit) {
+      await waitForAudioEnd(15000);
+      await wait(3000);
+    } else {
+      // user_exit이면 바로 넘어가고 싶으면 딜레이 없음
+      // await wait(0);
+      stopAnyAudio(); // user_exit만 끊어도 OK
     }
+
+    await supabase
+      .from("roleplay_sessions")
+      .update({ status: "ended", ended_at: new Date().toISOString(), end_reason: reason })
+      .eq("session_id", sessionId);
+
+    setSession((prev) =>
+      prev ? { ...prev, status: "ended", ended_at: new Date().toISOString(), end_reason: reason } : prev
+    );
+  } finally {
+    navigate(`/${variant}/result/${sessionId}`);
   }
+}
+  async function checkGoalsWithEdge(args: {
+    sessionId: string;
+    scenarioId: string;
+    userText: string;
+    aiText: string;
+    goals: ScenarioGoalRow[];
+  }): Promise<{ achieved_goal_ids: string[] }> {
+    const { data: sess } = await supabase.auth.getSession();
+    const accessToken = sess.session?.access_token;
 
-  // ---- Load ----
-  useEffect(() => {
-    if (!sessionId) return;
+    const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
+    const fnUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/goal_check`;
 
-    (async () => {
-      setLoading(true);
-      setFatal(null);
+    const payload = {
+      sessionId: args.sessionId,
+      scenarioId: args.scenarioId,
+      userText: args.userText,
+      aiText: args.aiText,
+      goals: args.goals.map((g) => ({
+        goal_id: g.goal_id,
+        goal_title: g.goal_title,
+        goal_type: g.goal_type,
+        goal_definition: g.goal_definition,
+        success_threshold: g.success_threshold,
+      })),
+    };
 
-      const { data: auth } = await supabase.auth.getUser();
-      if (!auth.user) {
-        navigate("/auth/login");
-        return;
-      }
+    const res = await fetch(fnUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: anonKey,
+        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+      },
+      body: JSON.stringify(payload),
+    });
 
-      // session
-      const { data: sData, error: sErr } = await supabase
-        .from("roleplay_sessions")
-        .select("*")
-        .eq("session_id", sessionId)
-        .single();
-
-      if (sErr) {
-        setFatal(sErr.message);
-        setLoading(false);
-        return;
-      }
-
-      const sess = sData as SessionRow;
-      setSession(sess);
-
-      // settings (optional)
-      const { data: setData } = await supabase
-        .from("session_settings")
-        .select("session_id,correction_mode,difficulty,question_speed")
-        .eq("session_id", sessionId)
-        .maybeSingle();
-      if (setData) setSettings(setData as SettingsRow);
-
-      if (!sess.scenario_id) {
-        setFatal("세션에 scenario_id가 없습니다.");
-        setLoading(false);
-        return;
-      }
-
-      // scenario
-      const { data: scData, error: scErr } = await supabase
-        .from("scenarios")
-        .select("scenario_id,package_id,title,scenario_desc,thumb_url")
-        .eq("scenario_id", sess.scenario_id)
-        .single();
-
-      if (scErr) {
-        setFatal(scErr.message);
-        setLoading(false);
-        return;
-      }
-      const sc = scData as ScenarioRow;
-      setScenario(sc);
-
-      // npc (optional)
-      const { data: npcData } = await supabase
-        .from("scenario_npcs")
-        .select("npc_id,scenario_id,role_name,role_desc,avatar_url,sort_order")
-        .eq("scenario_id", sc.scenario_id)
-        .order("sort_order", { ascending: true })
-        .limit(1);
-      setNpc(npcData && npcData.length > 0 ? (npcData[0] as NpcRow) : null);
-
-      // turns
-      const { data: tData, error: tErr } = await supabase
-        .from("roleplay_turns")
-        .select("turn_id,session_id,turn_no,role,text_raw,text_corrected,text_translated,audio_url,created_at")
-        .eq("session_id", sessionId)
-        .order("turn_no", { ascending: true });
-
-      if (tErr) {
-        setFatal(tErr.message);
-        setLoading(false);
-        return;
-      }
-
-      const turns = (tData ?? []) as DbTurn[];
-      const msgs: Msg[] = turns.map((t) => ({
-        id: t.turn_id,
-        role: t.role === "assistant" || t.role === "ai" ? "ai" : "user",
-        text: t.text_raw ?? "",
-        correctedText: t.text_corrected,
-        translatedText: t.text_translated,
-        audioUrl: t.audio_url ?? null,
-        canAutoplay: true,
-        createdAt: new Date(t.created_at).getTime(),
-      }));
-      setMessages(msgs);
-      setHasUserStarted(msgs.some((m) => m.role === "user" && m.text.trim().length > 0));
-
-      // ✅ B goals load
-      if (variant === "b") {
-        const { data: gData } = await supabase
-          .from("scenario_goals")
-          .select("goal_id,scenario_id,goal_text,sort_order")
-          .eq("scenario_id", sc.scenario_id)
-          .order("sort_order", { ascending: true });
-
-        const gList = (gData ?? []) as ScenarioGoalRow[];
-        setGoals(gList);
-
-        // 초기 체크 상태는 모두 false
-        const init: Record<string, boolean> = {};
-        gList.forEach((g) => (init[g.goal_id] = false));
-        setCheckedGoalIds(init);
-      }
-
-      setLoading(false);
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId]);
-
-  // ✅ B: 목표 모두 달성하면 자동 종료
-  useEffect(() => {
-    if (!isB) return;
-    if (!loading && goalsDone && session?.status === "active") {
-      endSession("goals_done");
+    const text = await res.text();
+    let json: any = null;
+    try {
+      json = JSON.parse(text);
+    } catch {
+      json = { raw: text };
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isB, loading, goalsDone, session?.status]);
+
+    if (!res.ok) {
+      throw new Error(`goal_check ${res.status}: ${JSON.stringify(json)}`);
+    }
+
+    return json as { achieved_goal_ids: string[] };
+  }
 
   async function generateAiReplyWithEdge(userText: string) {
     const payload = {
@@ -445,29 +417,146 @@ export default function PlayPage() {
     } catch {
       json = { raw: text };
     }
-    if (!res.ok) throw new Error(`chat ${res.status}: ${JSON.stringify(json)}`);
 
-    // ✅ 지금은 ai_text/correction/tts_audio_url만 쓰고,
-    // 나중에 edge에서 met_goal_ids 같은 걸 내려주면 여기서 반영하면 됨.
+    if (!res.ok) {
+      throw new Error(`chat ${res.status}: ${JSON.stringify(json)}`);
+    }
+
     return json as {
       ai_text: string;
       correction: string | null;
       tts_audio_url: string | null;
-
-      // (추후용) met_goal_ids?: string[];
     };
   }
 
-  // ✅ 임시: B 목표 체크 업데이트(추후 edge 결과로 교체)
-  function tempUpdateGoalsAfterUserTurn() {
+  useEffect(() => {
+    if (!sessionId) return;
+
+    (async () => {
+      setLoading(true);
+      setFatal(null);
+
+      const { data: auth } = await supabase.auth.getUser();
+      if (!auth.user) {
+        navigate("/auth/login");
+        return;
+      }
+
+      const { data: sData, error: sErr } = await supabase
+        .from("roleplay_sessions")
+        .select("*")
+        .eq("session_id", sessionId)
+        .single();
+
+      if (sErr) {
+        setFatal(sErr.message);
+        setLoading(false);
+        return;
+      }
+
+      const sess = sData as SessionRow;
+      setSession(sess);
+
+      if (!sess.scenario_id) {
+        setFatal("세션에 scenario_id가 없습니다.");
+        setLoading(false);
+        return;
+      }
+
+      const { data: scData, error: scErr } = await supabase
+        .from("scenarios")
+        .select("scenario_id,package_id,title,scenario_desc,thumb_url")
+        .eq("scenario_id", sess.scenario_id)
+        .single();
+
+      if (scErr) {
+        setFatal(scErr.message);
+        setLoading(false);
+        return;
+      }
+      const sc = scData as ScenarioRow;
+      setScenario(sc);
+
+      const { data: npcData } = await supabase
+        .from("scenario_npcs")
+        .select("npc_id,scenario_id,role_name,role_desc,avatar_url,sort_order")
+        .eq("scenario_id", sc.scenario_id)
+        .order("sort_order", { ascending: true })
+        .limit(1);
+      setNpc(npcData && npcData.length > 0 ? (npcData[0] as NpcRow) : null);
+
+      const { data: setData } = await supabase
+        .from("session_settings")
+        .select("session_id,correction_mode,difficulty,question_speed")
+        .eq("session_id", sessionId)
+        .maybeSingle();
+      if (setData) setSettings(setData as SettingsRow);
+
+      const { data: tData, error: tErr } = await supabase
+        .from("roleplay_turns")
+        .select("turn_id,session_id,turn_no,role,text_raw,text_corrected,text_translated,audio_url,created_at")
+        .eq("session_id", sessionId)
+        .order("turn_no", { ascending: true });
+
+      if (tErr) {
+        setFatal(tErr.message);
+        setLoading(false);
+        return;
+      }
+
+      const turns = (tData ?? []) as DbTurn[];
+      const msgs: Msg[] = turns.map((t) => ({
+        id: t.turn_id,
+        role: t.role === "assistant" || t.role === "ai" ? "ai" : "user",
+        text: t.text_raw ?? "",
+        correctedText: t.text_corrected,
+        translatedText: t.text_translated,
+        audioUrl: t.audio_url ?? null,
+        canAutoplay: true,
+        createdAt: new Date(t.created_at).getTime(),
+      }));
+      setMessages(msgs);
+      setHasUserStarted(msgs.some((m) => m.role === "user" && m.text.trim().length > 0));
+
+      const effectiveVariant = normalizeVariant(sess.variant ?? pathVariant);
+      if (effectiveVariant === "b") {
+        const { data: gData, error: gErr } = await supabase
+          .from("scenario_goals")
+          .select(
+            "goal_id,scenario_id,goal_title,goal_type,goal_definition,success_threshold,version,is_active,created_at"
+          )
+          .eq("scenario_id", sc.scenario_id)
+          .eq("is_active", true)
+          .order("created_at", { ascending: true });
+
+        if (gErr) {
+          setFatal(gErr.message);
+          setLoading(false);
+          return;
+        }
+
+        const gList = (gData ?? []) as ScenarioGoalRow[];
+        setGoals(gList);
+
+        const init: Record<string, boolean> = {};
+        gList.forEach((g) => {
+          init[g.goal_id] = false;
+        });
+        setCheckedGoalIds(init);
+      }
+
+      setLoading(false);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId]);
+
+  useEffect(() => {
     if (!isB) return;
-
-    // 아직 체크 안 된 목표 중 첫 번째를 체크(데모용)
-    const next = goals.find((g) => !checkedGoalIds[g.goal_id]);
-    if (!next) return;
-
-    setCheckedGoalIds((prev) => ({ ...prev, [next.goal_id]: true }));
-  }
+    if (!loading && goalsDone && session?.status === "active") {
+      endSession("goals_done");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isB, loading, goalsDone, session?.status]);
 
   async function startListening() {
     if (playState !== "idle") return;
@@ -515,6 +604,7 @@ export default function PlayPage() {
           interim += (interim ? " " : "") + transcript;
         }
       }
+
       const preview = [finalTranscriptRef.current, interim].filter(Boolean).join(" ");
       setInterimText(preview.trim());
     };
@@ -546,19 +636,19 @@ export default function PlayPage() {
     setPlayState("idle");
     finalTranscriptRef.current = "";
 
-    if (!tooShort && !tooFast) handleUserUtterance(finalText);
+    if (!tooShort && !tooFast) {
+      handleUserUtterance(finalText);
+    }
   }
 
   async function handleUserUtterance(text: string) {
     if (!sessionId || !session || !scenario) return;
 
-    // ✅ A: 이미 제한 도달이면 종료
     if (!isB && pairTurnsNow >= turnLimit) {
       await endSession("turn_limit");
       return;
     }
 
-    // ✅ B: 목표 다 끝났으면 종료
     if (isB && goalsDone) {
       await endSession("goals_done");
       return;
@@ -567,7 +657,6 @@ export default function PlayPage() {
     setPlayState("processing");
     if (!hasUserStarted) setHasUserStarted(true);
 
-    // 1) user turn insert
     const userNo = await getNextTurnNo();
     const { data: uTurn, error: uErr } = await supabase
       .from("roleplay_turns")
@@ -588,14 +677,18 @@ export default function PlayPage() {
 
     setMessages((prev) => [
       ...prev,
-      { id: uTurn.turn_id, role: "user", text, createdAt: new Date(uTurn.created_at).getTime() },
+      {
+        id: uTurn.turn_id,
+        role: "user",
+        text,
+        createdAt: new Date(uTurn.created_at).getTime(),
+      },
     ]);
 
     const nextUserCount = (session.turn_count_user ?? 0) + 1;
     await supabase.from("roleplay_sessions").update({ turn_count_user: nextUserCount }).eq("session_id", sessionId);
     setSession((prev) => (prev ? { ...prev, turn_count_user: nextUserCount } : prev));
 
-    // 2) AI 생성
     let aiText = "Sorry, could you say that again?";
     let correction: string | null = null;
     let ttsUrl: string | null = null;
@@ -605,30 +698,18 @@ export default function PlayPage() {
       aiText = res.ai_text || aiText;
       correction = res.correction ?? null;
       ttsUrl = res.tts_audio_url ?? null;
-
-      // ✅ (추후) edge에서 met_goal_ids를 내려주면 여기서 checkedGoalIds 업데이트하면 됨
-      // if (isB && res.met_goal_ids?.length) {
-      //   setCheckedGoalIds(prev => {
-      //     const next = { ...prev };
-      //     res.met_goal_ids!.forEach(id => next[id] = true);
-      //     return next;
-      //   });
-      // }
-
     } catch (e: any) {
       console.error(e);
       alert(`AI 호출 실패: ${e?.message ?? "unknown error"}`);
     }
 
-    // ✅ 임시: B는 사용자 1회 발화할 때마다 목표 1개 체크(나중에 edge 로직으로 교체)
-    if (isB) tempUpdateGoalsAfterUserTurn();
-
     if ((settings?.correction_mode ?? "suggest") === "correct" && correction) {
       await supabase.from("roleplay_turns").update({ text_corrected: correction }).eq("turn_id", uTurn.turn_id);
-      setMessages((prev) => prev.map((m) => (m.id === uTurn.turn_id ? { ...m, correctedText: correction } : m)));
+      setMessages((prev) =>
+        prev.map((m) => (m.id === uTurn.turn_id ? { ...m, correctedText: correction } : m))
+      );
     }
 
-    // 3) ai turn insert
     const aiNo = await getNextTurnNo();
     const { data: aTurn, error: aErr } = await supabase
       .from("roleplay_turns")
@@ -662,13 +743,38 @@ export default function PlayPage() {
     await supabase.from("roleplay_sessions").update({ turn_count_ai: nextAiCount }).eq("session_id", sessionId);
     setSession((prev) => (prev ? { ...prev, turn_count_ai: nextAiCount } : prev));
 
-    // 4) 첫 user 이후부터 자동재생
     if (ttsUrl) {
       const ok = await tryAutoplay(ttsUrl);
       setMessages((prev) => prev.map((m) => (m.id === newAiMsg.id ? { ...m, canAutoplay: ok } : m)));
     }
 
-    // ✅ A: 왕복 1턴 완료 체크 → 제한이면 종료
+    if (isB && goals.length > 0) {
+      try {
+        const out = await checkGoalsWithEdge({
+          sessionId,
+          scenarioId: scenario.scenario_id,
+          userText: text,
+          aiText,
+          goals,
+        });
+
+        console.log("goal_check out", out);
+
+        const achieved = Array.isArray(out?.achieved_goal_ids) ? out.achieved_goal_ids : [];
+        if (achieved.length > 0) {
+          setCheckedGoalIds((prev) => {
+            const next = { ...prev };
+            achieved.forEach((id) => {
+              next[id] = true;
+            });
+            return next;
+          });
+        }
+      } catch (e) {
+        console.error("goal_check failed", e);
+      }
+    }
+
     if (!isB) {
       const nextPairTurns = Math.min(nextUserCount, nextAiCount);
       if (nextPairTurns >= turnLimit) {
@@ -676,15 +782,6 @@ export default function PlayPage() {
         await endSession("turn_limit");
         return;
       }
-    }
-
-    // ✅ B: 목표 다 채웠으면 종료(즉시 반영)
-    if (isB) {
-      const willDone =
-        goals.length > 0 && goals.every((g) => (g.goal_id in checkedGoalIds ? checkedGoalIds[g.goal_id] : false));
-      // 위 willDone은 setState 타이밍상 즉시 반영이 어려울 수 있어,
-      // goalsDone useEffect가 최종적으로 종료를 처리해줌.
-      // (즉시 종료를 원하면 checkedGoalIds를 함수형 업데이트로 계산해서 여기서 판정하면 됨)
     }
 
     setPlayState("idle");
@@ -697,7 +794,6 @@ export default function PlayPage() {
       return "응답을 기다리고 있어요";
     }
 
-    // A
     if (!hasUserStarted) return "버튼을 누르고 대화를 시작해주세요";
     if (playState === "idle") return "말을 시작할 때 버튼을 눌러주세요";
     if (playState === "listening") return "듣고 있어요. 말이 끝나면 다시 버튼을 눌러주세요.";
@@ -719,81 +815,74 @@ export default function PlayPage() {
 
   return (
     <div className={styles.container}>
-      {/* Header */}
-      <div className={styles.header}>
-        <div className={styles.headerTitle}>{scenario?.title ?? "시나리오 명"}</div>
-        <button className={styles.closeBtn} onClick={() => endSession("user_exit")} aria-label="close">
-          ✕
-        </button>
-      </div>
+      <div className={styles.topArea}>
+        <div className={styles.header}>
+          <div className={styles.headerTitle}>{scenario?.title ?? "시나리오 명"}</div>
+          <button className={styles.closeBtn} onClick={() => endSession("user_exit")} aria-label="close">
+            ✕
+          </button>
+        </div>
 
-      {/* Timer + progress */}
-      <div className={styles.metaRow}>
-        <div className={styles.timer}>{mmss(elapsedSec)}</div>
+        <div className={styles.metaRow}>
+          <div className={styles.timer}>{mmss(elapsedSec)}</div>
 
-        {/* ✅ A는 턴 표기, B는 목표 표기로 */}
-        {!isB ? (
-          <div className={styles.turnCount}>
-            {pad2(Math.min(pairTurnsNow, turnLimit))}/{pad2(turnLimit)}
+          {!isB ? (
+            <div className={styles.turnCount}>
+              {pad2(Math.min(pairTurnsNow, turnLimit))}/{pad2(turnLimit)}
+            </div>
+          ) : (
+            <div className={styles.turnCount}>
+              {goalsCheckedCount}/{Math.max(1, goalsCount)}
+            </div>
+          )}
+        </div>
+
+        {!isB && (
+          <div className={styles.progressBar}>
+            <div className={styles.progressFill} style={{ width: `${progressRatio * 100}%` }} />
           </div>
-        ) : (
-          <div className={styles.turnCount}>
-            {goalsCheckedCount}/{Math.max(1, goalsCount)}
+        )}
+
+        {isB && (
+          <div className={styles.goalPanel}>
+            <div className={styles.goalPanelTitle}>목표</div>
+            <div className={styles.goalBox}>
+              {goals.map((g) => {
+                const checked = !!checkedGoalIds[g.goal_id];
+                return (
+                  <div key={g.goal_id} className={styles.goalItem}>
+                    <img src={checked ? "/check_act.svg" : "/check_dis.svg"} className={styles.goalIcon} alt="" />
+                    <span className={styles.goalText}>{g.goal_title}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {!isB && (
+          <div className={styles.scDescCard}>
+            <div className={styles.scDescTitle}>시나리오 설명</div>
+            <div className={styles.scDescBody}>{scenario?.scenario_desc ?? "설명 문장"}</div>
           </div>
         )}
       </div>
 
-      {/* ✅ A만 프로그레스바 보여주기 */}
-      {!isB && (
-        <div className={styles.progressBar}>
-          <div className={styles.progressFill} style={{ width: `${progressRatio * 100}%` }} />
-        </div>
-      )}
-
-      {/* ✅ B: 목표 박스(두 번째 목업처럼) */}
-      {isB && (
-        <div className={styles.goalPanel}>
-          <div className={styles.goalPanelTitle}>목표</div>
-          <div className={styles.goalBox}>
-            {goals.map((g) => {
-              const checked = !!checkedGoalIds[g.goal_id];
-              return (
-                <div key={g.goal_id} className={styles.goalItem}>
-                  <img
-                    src={checked ? "/check_act.svg" : "/check_dis.svg"}
-                    className={styles.goalIcon}
-                    alt=""
-                  />
-                  <span className={styles.goalText}>{g.goal_text}</span>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Scenario desc (A/B 모두 상단에 카드) */}
-      <div className={styles.scDescCard}>
-        <div className={styles.scDescTitle}>시나리오 설명</div>
-        <div className={styles.scDescBody}>{scenario?.scenario_desc ?? "설명 문장"}</div>
-      </div>
-
-      {/* Chat */}
-      <div className={styles.chatArea}>
+      <div ref={chatScrollRef} className={styles.chatArea}>
         {messages.map((m) => {
-          const isAi = m.role === "ai";
+          const isAiMsg = m.role === "ai";
           return (
-            <div key={m.id} className={isAi ? styles.aiWrap : styles.userWrap}>
-              <div className={isAi ? styles.aiBubble : styles.userBubble}>
+            <div key={m.id} className={isAiMsg ? styles.aiWrap : styles.userWrap}>
+              <div className={isAiMsg ? styles.aiBubble : styles.userBubble}>
                 <div className={styles.bubbleText}>{m.text}</div>
 
-                {isAi && m.audioUrl && m.canAutoplay === false && (
+                {isAiMsg && m.audioUrl && m.canAutoplay === false && (
                   <div className={styles.subRow}>
                     <span className={styles.autoPlayHint}>자동재생이 막혔어요</span>
                   </div>
                 )}
 
-                {!isAi && (settings?.correction_mode ?? "suggest") === "correct" && (
+                {!isAiMsg && (settings?.correction_mode ?? "suggest") === "correct" && (
                   <>
                     {!m.correctedText ? (
                       <div className={styles.subAction}>교정하기</div>
@@ -823,7 +912,6 @@ export default function PlayPage() {
         <div ref={bottomRef} />
       </div>
 
-      {/* Mic */}
       <div className={styles.micArea}>
         <div className={styles.micHint}>{micLabel}</div>
 
@@ -835,7 +923,7 @@ export default function PlayPage() {
         >
           <img
             className={styles.micIcon}
-            src={playState === "listening" ? "/record.png" : "/speak.png"}
+            src={playState === "listening" ? "/record.svg" : "/speak.svg"}
             alt={playState === "listening" ? "record" : "speak"}
           />
         </button>

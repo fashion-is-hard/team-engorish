@@ -132,3 +132,179 @@
   font-weight:600;
   cursor:pointer;
 }
+
+.container{
+  min-height:100vh;
+  background:#ffffff;
+  padding:20px 16px 28px;
+  position:relative;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+}
+
+.loading{
+  min-height:100vh;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  flex-direction:column;
+  color:#444;
+}
+
+.smallBtn{
+  padding:10px 12px;
+  border:1px solid #ddd;
+  border-radius:10px;
+  background:#fff;
+}
+
+.closeBtn{
+  position:absolute;
+  right:12px;
+  top:12px;
+  width:44px;
+  height:44px;
+  border:none;
+  background:transparent;
+  font-size:28px;
+  color:#4E555E;
+  cursor:pointer;
+}
+
+.iconWrap{
+  margin-top:54px;
+  margin-bottom:18px;
+}
+
+.successIcon, .failIcon{
+  width:96px;
+  height:96px;
+  border-radius:999px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  color:#fff;
+  font-size:48px;
+  font-weight:800;
+}
+
+.successIcon{ background:#79C28A; }
+.failIcon{ background:#D98484; }
+
+.goalPanel{
+  width:100%;
+  max-width:420px;
+  background:#99A9BE;
+  border-radius:12px;
+  padding:12px;
+  margin-top:4px;
+}
+
+.goalHeader{
+  background:#7F90A8;
+  color:#fff;
+  font-weight:700;
+  text-align:center;
+  border-radius:8px;
+  padding:10px 12px;
+  margin-bottom:10px;
+}
+
+.goalBox{
+  background:#ffffff;
+  border-radius:10px;
+  padding:10px 12px;
+}
+
+.goalItem{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:8px 0;
+}
+
+.goalIcon{
+  width:16px;
+  height:16px;
+  flex-shrink:0;
+}
+
+.goalText{
+  font-size:14px;
+  font-weight:500;
+  color:#4E555E;
+}
+
+.insightCardDark{
+  width:100%;
+  max-width:420px;
+  margin-top:12px;
+  background:#4E555E;
+  border-radius:12px;
+  padding:14px 14px;
+  color:#fff;
+}
+
+.insightCardLight{
+  width:100%;
+  max-width:420px;
+  margin-top:10px;
+  background:#C8D1DB;
+  border-radius:12px;
+  padding:14px 14px;
+  color:#2B2B2B;
+}
+
+.insightTitle{
+  font-size:14px;
+  font-weight:700;
+  margin-bottom:8px;
+}
+
+.bullets{
+  margin:0;
+  padding-left:18px;
+  font-size:13px;
+  line-height:1.45;
+}
+
+.nextHint{
+  width:100%;
+  max-width:420px;
+  text-align:center;
+  margin:18px 0 0;
+  color:#2B2B2B;
+  font-weight:600;
+}
+
+.bottomRow{
+  width:100%;
+  max-width:420px;
+  margin-top:auto;
+  display:flex;
+  gap:12px;
+  padding-top:18px;
+}
+
+.btnGhost{
+  flex:1;
+  height:52px;
+  border-radius:12px;
+  border:none;
+  background:#C8D1DB;
+  color:#4E555E;
+  font-weight:700;
+  cursor:pointer;
+}
+
+.btnPrimary{
+  flex:1;
+  height:52px;
+  border-radius:12px;
+  border:none;
+  background:#4E555E;
+  color:#fff;
+  font-weight:800;
+  cursor:pointer;
+}

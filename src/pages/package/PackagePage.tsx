@@ -1,19 +1,23 @@
+// src/pages/package/PackagePage.tsx
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
 import type { PackageRow, ScenarioRow } from "@/types/db";
 import styles from "./PackagePage.module.css";
 import { fetchUserProgress } from "@/services/progress";
 
 type VariantPath = "a" | "b";
-function normalizeVariant(v: unknown): VariantPath {
-  return v === "b" ? "b" : "a";
+function getVariantFromPath(pathname: string): VariantPath {
+  return pathname.startsWith("/b") ? "b" : "a";
 }
 
 export default function PackagePage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const params = useParams();
-  const variant = normalizeVariant((params as any).variant);
+
+  // ✅ variant는 params가 아니라 path prefix에서 결정 (라우팅 안정화 핵심)
+  const variant = useMemo(() => getVariantFromPath(location.pathname), [location.pathname]);
   const packageId = (params as any).packageId as string | undefined;
 
   const [pkg, setPkg] = useState<PackageRow | null>(null);
@@ -61,7 +65,6 @@ export default function PackagePage() {
         const prog = await fetchUserProgress();
         const p = prog.packageProgressMap?.[packageId];
         if (p && typeof p.currentIndex === "number") {
-          // clear면 마지막 인덱스이긴 한데, 버튼은 disabled 처리로 막을 수도 있음
           setCurrentIndex(Math.max(0, Math.min(p.currentIndex, Math.max(0, list.length - 1))));
         } else {
           setCurrentIndex(0);
@@ -91,7 +94,8 @@ export default function PackagePage() {
     <div className={styles.container}>
       {/* Header */}
       <div className={styles.header}>
-        <button className={styles.backBtn} type="button" onClick={() => navigate(`/${variant}/categories`)}>
+        {/* ✅ categories는 이제 안 쓰니까 home으로 */}
+        <button className={styles.backBtn} type="button" onClick={() => navigate(`/${variant}/home`)}>
           <img src="/back.svg" alt="뒤로가기" />
         </button>
         <h1 className={styles.headerTitle}>{pkg?.title ?? "패키지"}</h1>
@@ -110,7 +114,7 @@ export default function PackagePage() {
           <div className={styles.list}>
             {scenarios.map((s, index) => {
               const unlocked = index <= currentIndex; // 완료 + 현재
-              const locked = index > currentIndex;    // 잠김
+              const locked = index > currentIndex; // 잠김
               const isCurrent = index === currentIndex;
 
               return (

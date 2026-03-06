@@ -1,67 +1,55 @@
+// src/pages/result/ResultPage.tsx
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
 import styles from "./ResultPage.module.css";
 
-type SessionRow = {
-  session_id: string;
-  scenario_id: string | null;
-  started_at: string;
-  ended_at: string | null;
-  end_reason: string | null;
-  turn_limit: number | null;
-  turn_count_user: number;
-  turn_count_ai: number;
+type VariantPath = "a" | "b";
+
+type InsightBox = {
+  title: string;
+  bullets: string[];
 };
 
-type TurnRow = {
-  turn_id: string;
-  role: string; // 'user' | 'ai'
-  text_raw: string | null;
-  created_at: string;
+type ResultInsightResponse = {
+  variant: "a" | "b";
+  success: boolean;
+  achieved_goal_ids: string[];
+  goals: { goal_id: string; goal_title: string }[];
+  insight: {
+    title: string;
+    box1: InsightBox;
+    box2: InsightBox;
+    next_hint: string;
+  };
+  scenario: { title: string };
 };
-
-function pad2(n: number) {
-  return String(n).padStart(2, "0");
-}
-function mmss(totalSec: number) {
-  const m = Math.floor(totalSec / 60);
-  const s = totalSec % 60;
-  return `${pad2(m)}:${pad2(s)}`;
-}
-function countWords(text: string) {
-  return text.trim().split(/\s+/).filter(Boolean).length;
-}
-
-/** 현재 경로(/a/... or /b/...)에서 variant 추출 */
-function getVariantFromPath(pathname: string): "a" | "b" {
-  const seg = pathname.split("/").filter(Boolean)[0];
-  return seg === "b" ? "b" : "a";
-}
 
 export default function ResultPage() {
   const navigate = useNavigate();
   const params = useParams();
-  const location = useLocation() as any;
+  const location = useLocation();
 
-  const variant = useMemo(() => getVariantFromPath(location?.pathname ?? "/a"), [location?.pathname]);
-
-  // ✅ 라우터: /a/result/:sessionId , /b/result/:sessionId
-  // (혹시 state로 넘어오는 경우도 대비)
-  const sessionId: string | undefined = (params as any).sessionId || location?.state?.sessionId;
+  const sessionId = (params as any).sessionId as string | undefined;
+  const pathVariant: VariantPath = location.pathname.startsWith("/b") ? "b" : "a";
 
   const [loading, setLoading] = useState(true);
   const [fatal, setFatal] = useState<string | null>(null);
+  const [result, setResult] = useState<ResultInsightResponse | null>(null);
+  const [retrying, setRetrying] = useState(false);
+  const [continuing, setContinuing] = useState(false);
 
-  const [session, setSession] = useState<SessionRow | null>(null);
-  const [turns, setTurns] = useState<TurnRow[]>([]);
+  const variant: VariantPath = (result?.variant ?? pathVariant) === "b" ? "b" : "a";
+  const isB = variant === "b";
+
+  const achievedSet = useMemo(() => {
+    const s = new Set<string>();
+    (result?.achieved_goal_ids ?? []).forEach((id) => s.add(id));
+    return s;
+  }, [result?.achieved_goal_ids]);
 
   useEffect(() => {
-    if (!sessionId) {
-      setFatal("sessionId가 없습니다.");
-      setLoading(false);
-      return;
-    }
+    if (!sessionId) return;
 
     (async () => {
       setLoading(true);
@@ -73,151 +61,232 @@ export default function ResultPage() {
         return;
       }
 
-      const { data: sData, error: sErr } = await supabase
-        .from("roleplay_sessions")
-        .select("session_id,scenario_id,started_at,ended_at,end_reason,turn_limit,turn_count_user,turn_count_ai")
-        .eq("session_id", sessionId)
-        .single();
+      try {
+        const { data: sess } = await supabase.auth.getSession();
+        const accessToken = sess.session?.access_token;
 
-      if (sErr) {
-        setFatal(sErr.message);
+        const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
+        const fnUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/result_insight`;
+
+        const res = await fetch(fnUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+            apikey: anonKey,
+            ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+          },
+          body: JSON.stringify({ sessionId }),
+        });
+
+        const text = await res.text();
+        let json: any = null;
+        try {
+          json = JSON.parse(text);
+        } catch {
+          json = { raw: text };
+        }
+
+        if (!res.ok) {
+          throw new Error(`result_insight ${res.status}: ${JSON.stringify(json)}`);
+        }
+
+        setResult(json as ResultInsightResponse);
         setLoading(false);
-        return;
-      }
-
-      const sess = sData as SessionRow;
-      setSession(sess);
-
-      const { data: tData, error: tErr } = await supabase
-        .from("roleplay_turns")
-        .select("turn_id,role,text_raw,created_at")
-        .eq("session_id", sessionId)
-        .order("created_at", { ascending: true });
-
-      if (tErr) {
-        setFatal(tErr.message);
+      } catch (e: any) {
+        setFatal(e?.message ?? "unknown error");
         setLoading(false);
-        return;
       }
-
-      setTurns((tData ?? []) as TurnRow[]);
-      setLoading(false);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId]);
 
-  const durationSec = useMemo(() => {
-    if (!session?.started_at) return 0;
-    const start = new Date(session.started_at).getTime();
-    const end = session.ended_at ? new Date(session.ended_at).getTime() : Date.now();
-    return Math.max(0, Math.floor((end - start) / 1000));
-  }, [session?.started_at, session?.ended_at]);
+  async function handleRetry() {
+    if (!sessionId || retrying) return;
 
-  const userWordCount = useMemo(() => {
-    const userTexts = turns
-      .filter((t) => t.role === "user")
-      .map((t) => (t.text_raw ?? "").trim())
-      .filter(Boolean);
+    try {
+      setRetrying(true);
 
-    let sum = 0;
-    for (const tx of userTexts) sum += countWords(tx);
-    return sum;
-  }, [turns]);
+      const { data: sess } = await supabase.auth.getSession();
+      const accessToken = sess.session?.access_token;
 
-  const onClose = () => {
-    navigate(`/${variant}/home`);
-  };
+      const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
+      const fnUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/retry_session`;
 
-  const goReport = () => {
-    // ✅ 일단 이동만
-    navigate(`/${variant}/report`, { state: { sessionId } });
-  };
+      const res = await fetch(fnUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+          apikey: anonKey,
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        },
+        body: JSON.stringify({ sessionId }),
+      });
 
-  const goNext = async () => {
-    if (!session?.scenario_id) {
-      navigate(`/${variant}/home`);
-      return;
+      const text = await res.text();
+      let json: any = null;
+      try {
+        json = JSON.parse(text);
+      } catch {
+        json = { raw: text };
+      }
+
+      if (!res.ok) {
+        throw new Error(`retry_session ${res.status}: ${JSON.stringify(json)}`);
+      }
+
+      const nextVariant: VariantPath = json?.variant === "b" ? "b" : "a";
+      const newSessionId = json?.new_session_id;
+
+      if (!newSessionId) {
+        throw new Error("new_session_id가 없습니다.");
+      }
+
+      navigate(`/${nextVariant}/play/${newSessionId}`);
+    } catch (e: any) {
+      alert(`다시 하기 실패: ${e?.message ?? "unknown error"}`);
+      setRetrying(false);
     }
+  }
 
-    // 1) 현재 시나리오의 package_id / sort_order
-    const { data: cur, error: curErr } = await supabase
-      .from("scenarios")
-      .select("scenario_id,package_id,sort_order,is_active")
-      .eq("scenario_id", session.scenario_id)
-      .single();
+  async function handleContinue() {
+    if (!sessionId || continuing) return;
 
-    if (curErr || !cur) {
-      console.error(curErr);
-      navigate(`/${variant}/home`);
-      return;
+    try {
+      setContinuing(true);
+
+      const { data: sess } = await supabase.auth.getSession();
+      const accessToken = sess.session?.access_token;
+
+      const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
+      const fnUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/next_scenario`;
+
+      const res = await fetch(fnUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+          apikey: anonKey,
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        },
+        body: JSON.stringify({ sessionId }),
+      });
+
+      const text = await res.text();
+      let json: any = null;
+      try {
+        json = JSON.parse(text);
+      } catch {
+        json = { raw: text };
+      }
+
+      if (!res.ok) {
+        throw new Error(`next_scenario ${res.status}: ${JSON.stringify(json)}`);
+      }
+
+      const nextVariant: VariantPath = json?.variant === "b" ? "b" : "a";
+
+      if (json?.done || !json?.next_scenario_id) {
+        navigate(`/${nextVariant}/home`);
+        return;
+      }
+
+      navigate(`/${nextVariant}/scenarios/${json.next_scenario_id}`);
+    } catch (e: any) {
+      alert(`이어하기 실패: ${e?.message ?? "unknown error"}`);
+      setContinuing(false);
     }
-
-    const curSort = cur.sort_order ?? 0;
-
-    // 2) 같은 패키지에서 다음 시나리오
-    const { data: nextList, error: nextErr } = await supabase
-      .from("scenarios")
-      .select("scenario_id,sort_order,is_active")
-      .eq("package_id", cur.package_id)
-      .eq("is_active", true)
-      .gt("sort_order", curSort)
-      .order("sort_order", { ascending: true })
-      .limit(1);
-
-    if (nextErr) {
-      console.error(nextErr);
-      navigate(`/${variant}/home`);
-      return;
-    }
-
-    const next = nextList?.[0];
-
-    // 3) 있으면 다음 시나리오 디테일, 없으면 패키지로
-    if (next?.scenario_id) {
-      navigate(`/${variant}/scenarios/${next.scenario_id}`);
-    } else {
-      navigate(`/${variant}/packages/${cur.package_id}`);
-    }
-  };
+  }
 
   if (loading) return <div className={styles.loading}>불러오는 중…</div>;
-  if (fatal) return <div className={styles.loading}>에러: {fatal}</div>;
+
+  if (fatal || !result) {
+    return (
+      <div className={styles.loading}>
+        <div style={{ marginBottom: 10, color: "#b00020" }}>
+          에러: {fatal ?? "결과를 불러올 수 없습니다."}
+        </div>
+        <button className={styles.smallBtn} onClick={() => navigate(-1)}>
+          뒤로가기
+        </button>
+      </div>
+    );
+  }
+
+  const success = !!result.success;
 
   return (
     <div className={styles.container}>
-      {/* top bar */}
-      <div className={styles.topBar}>
-        <div />
-        <button className={styles.closeBtn} onClick={onClose} aria-label="close">
-          ✕
-        </button>
+      <button className={styles.closeBtn} onClick={() => navigate(`/${variant}/home`)} aria-label="close">
+        ✕
+      </button>
+
+      <div className={styles.iconWrap}>
+        {success ? (
+          <div className={styles.successIcon}>✓</div>
+        ) : (
+          <div className={styles.failIcon}>!</div>
+        )}
       </div>
 
-      {/* main */}
-      <div className={styles.center}>
-        <div className={styles.checkCircle}>✓</div>
-        <div className={styles.title}>대화 완료</div>
-        <div className={styles.subtitle}>다른 시나리오도 도전해보세요</div>
-
-        <div className={styles.cards}>
-          <div className={styles.statCard}>
-            <div className={styles.statLabel}>대화소요시간</div>
-            <div className={styles.statValue}>{mmss(durationSec)}</div>
-          </div>
-          <div className={styles.statCard}>
-            <div className={styles.statLabel}>말한 단어 수</div>
-            <div className={styles.statValue}>{userWordCount}</div>
-          </div>
+      <div className={styles.goalPanel}>
+        <div className={styles.goalHeader}>
+          {isB ? (success ? "목표를 달성했어요!" : "목표를 달성하지 못했어요") : "세션을 완료했어요!"}
         </div>
+
+        {isB && (
+          <div className={styles.goalBox}>
+            {(result.goals ?? []).map((g) => {
+              const checked = achievedSet.has(g.goal_id);
+              return (
+                <div key={g.goal_id} className={styles.goalItem}>
+                  <img src={checked ? "/check_act.svg" : "/check_dis.svg"} className={styles.goalIcon} alt="" />
+                  <span className={styles.goalText}>{g.goal_title}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
-      {/* bottom actions */}
-      <div className={styles.bottom}>
-        <button className={styles.btnGhost} onClick={goReport}>
+      <div className={styles.insightCardDark}>
+        <div className={styles.insightTitle}>{result.insight.box1.title}</div>
+        <ul className={styles.bullets}>
+          {(result.insight.box1.bullets ?? []).slice(0, 3).map((b, i) => (
+            <li key={i}>{b}</li>
+          ))}
+        </ul>
+      </div>
+
+      <div className={styles.insightCardLight}>
+        <div className={styles.insightTitle}>{result.insight.box2.title}</div>
+        <ul className={styles.bullets}>
+          {(result.insight.box2.bullets ?? []).slice(0, 3).map((b, i) => (
+            <li key={i}>{b}</li>
+          ))}
+        </ul>
+      </div>
+
+      <div className={styles.nextHint}>{result.insight.next_hint}</div>
+
+      <div className={styles.bottomRow}>
+        <button className={styles.btnGhost} onClick={() => navigate(`/${variant}/report`)}>
           리포트 보러가기
         </button>
-        <button className={styles.btnPrimary} onClick={goNext}>
-          이어하기
+
+        <button
+          className={styles.btnPrimary}
+          onClick={success ? handleContinue : handleRetry}
+          disabled={success ? continuing : retrying}
+        >
+          {success
+            ? continuing
+              ? "준비 중..."
+              : "이어하기"
+            : retrying
+              ? "준비 중..."
+              : "다시 하기"}
         </button>
       </div>
     </div>

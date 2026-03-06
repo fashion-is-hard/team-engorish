@@ -4,28 +4,32 @@ import { supabase } from "@/lib/supabaseClient";
 import styles from "./HomePage.module.css";
 import { fetchUserProgress } from "@/services/progress";
 
-type PackageLite = {
+type CategoryRow = { category_id: string; name: string; sort_order: number | null };
+type PackageRowLite = {
   package_id: string;
+  category_id: string;
   title: string;
-  thumb_url: string | null;
-};
-
-type ScenarioLite = {
-  scenario_id: string;
-  package_id: string;
-  title: string;
-  scenario_desc: string | null;
+  description: string | null;
   thumb_url: string | null;
   sort_order: number | null;
+  is_active: boolean;
 };
+
+type BadgeType = "clear" | "progress" | "not_started";
 
 function getVariantFromPath(pathname: string): "a" | "b" {
   return pathname.startsWith("/b") ? "b" : "a";
 }
 
-function imgSrc(fileName?: string | null, fallback = "/scenario.png") {
+function imgSrc(fileName?: string | null, fallback = "/package.png") {
   if (fileName && fileName.trim()) return `/${fileName}.png`;
   return fallback;
+}
+
+function badgeLabel(t: BadgeType) {
+  if (t === "clear") return "완료";
+  if (t === "progress") return "진행 중";
+  return "시작 전";
 }
 
 export default function HomePage() {
@@ -36,15 +40,13 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true);
   const [fatal, setFatal] = useState<string | null>(null);
 
-  const [activePackageId, setActivePackageId] = useState<string | null>(null);
-  const [activePackage, setActivePackage] = useState<PackageLite | null>(null);
+  const [categories, setCategories] = useState<CategoryRow[]>([]);
+  const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null);
 
-  const [scenarioList, setScenarioList] = useState<ScenarioLite[]>([]);
-  const [currentIndex, setCurrentIndex] = useState(0);
+  const [packages, setPackages] = useState<PackageRowLite[]>([]);
+  const [progressMap, setProgressMap] = useState<any>(null); // fetchUserProgress 결과 그대로 저장
 
-  // (A) 홈 규칙:
-  // - 진행중(=clear 아닌 패키지)이 있으면 “진행중인 학습” UI
-  // - 전부 clear면 카테고리 페이지로 보내기
+  // ----- boot load -----
   useEffect(() => {
     let cancelled = false;
 
@@ -59,68 +61,26 @@ export default function HomePage() {
           return;
         }
 
-        const prog = await fetchUserProgress();
-        const pkgIds = Object.keys(prog.packageProgressMap || {});
-
-        const isAllClear = pkgIds.length > 0 && pkgIds.every((pid) => prog.packageProgressMap[pid]?.isClear === true);
-        if (isAllClear) {
-          navigate(`/${variant}/categories`, { replace: true });
-          return;
-        }
-
-        // 진행중 패키지 선택: 최근 패키지 우선, 없으면 clear 아닌 첫 패키지
-        let chosen: string | null = null;
-        if (
-          prog.lastPackageId &&
-          prog.packageProgressMap[prog.lastPackageId] &&
-          !prog.packageProgressMap[prog.lastPackageId].isClear
-        ) {
-          chosen = prog.lastPackageId;
-        } else {
-          for (const pid of pkgIds) {
-            if (!prog.packageProgressMap[pid]?.isClear) {
-              chosen = pid;
-              break;
-            }
-          }
-        }
-
-        if (!chosen) {
-          navigate(`/${variant}/categories`, { replace: true });
-          return;
-        }
-
-        if (cancelled) return;
-        setActivePackageId(chosen);
-
-        // package info
-        const { data: pData, error: pErr } = await supabase
-          .from("packages")
-          .select("package_id,title,thumb_url")
-          .eq("package_id", chosen)
-          .single();
-
-        if (pErr) throw new Error(pErr.message);
-        if (cancelled) return;
-        setActivePackage(pData as PackageLite);
-
-        // scenarios in package
-        const { data: sData, error: sErr } = await supabase
-          .from("scenarios")
-          .select("scenario_id,package_id,title,scenario_desc,thumb_url,sort_order,is_active")
-          .eq("package_id", chosen)
-          .eq("is_active", true)
+        // 1) categories
+        const { data: cData, error: cErr } = await supabase
+          .from("learning_categories")
+          .select("category_id,name,sort_order")
           .order("sort_order", { ascending: true });
 
-        if (sErr) throw new Error(sErr.message);
-        const list = (sData ?? []) as ScenarioLite[];
+        if (cErr) throw new Error(cErr.message);
+        const cList = (cData ?? []) as CategoryRow[];
 
         if (cancelled) return;
-        setScenarioList(list);
+        setCategories(cList);
 
-        const p = prog.packageProgressMap[chosen];
-        const idx = typeof p?.currentIndex === "number" ? p.currentIndex : 0;
-        setCurrentIndex(Math.max(0, Math.min(idx, Math.max(0, list.length - 1))));
+        // 기본 선택: 첫 카테고리
+        const firstCat = cList?.[0]?.category_id ?? null;
+        setActiveCategoryId(firstCat);
+
+        // 2) progress (badge 계산용)
+        const prog = await fetchUserProgress();
+        if (cancelled) return;
+        setProgressMap(prog?.packageProgressMap ?? {});
 
         setLoading(false);
       } catch (e: any) {
@@ -133,26 +93,64 @@ export default function HomePage() {
     return () => {
       cancelled = true;
     };
-  }, [navigate, variant]);
+  }, [navigate]);
 
-  const totalCount = scenarioList.length;
+  // ----- when category changes: load packages -----
+  useEffect(() => {
+    let cancelled = false;
+    if (!activeCategoryId) return;
 
-  const progressText = useMemo(() => {
-    // 완료 수 = currentIndex (다음으로 해야할 인덱스)
-    return `${currentIndex}/${Math.max(0, totalCount)}`;
-  }, [currentIndex, totalCount]);
+    (async () => {
+      try {
+        setLoading(true);
+        setFatal(null);
 
-  const progressRatio = useMemo(() => {
-    if (totalCount <= 0) return 0;
-    return Math.max(0, Math.min(1, currentIndex / totalCount));
-  }, [currentIndex, totalCount]);
+        const { data: pData, error: pErr } = await supabase
+          .from("packages")
+          .select("package_id,category_id,title,description,thumb_url,sort_order,is_active")
+          .eq("category_id", activeCategoryId)
+          .eq("is_active", true)
+          .order("sort_order", { ascending: true });
 
-  const nextScenario = useMemo(() => scenarioList[currentIndex] ?? null, [scenarioList, currentIndex]);
+        if (pErr) throw new Error(pErr.message);
 
-  const goCategories = () => navigate(`/${variant}/categories`);
-  const goContinue = () => {
-    if (!nextScenario) return;
-    navigate(`/${variant}/scenarios/${nextScenario.scenario_id}`);
+        if (cancelled) return;
+        setPackages((pData ?? []) as PackageRowLite[]);
+        setLoading(false);
+      } catch (e: any) {
+        if (cancelled) return;
+        setFatal(e?.message ?? "알 수 없는 오류");
+        setLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeCategoryId]);
+
+  // ...위 코드 동일
+
+  const goReport = () => navigate(`/${variant}/report`);
+
+  const logout = async () => {
+    await supabase.auth.signOut();
+    navigate("/auth/login");
+  };
+
+  // ✅ 패키지 페이지 이동
+  const goPackage = (packageId: string) => {
+    navigate(`/${variant}/packages/${packageId}`);
+  };
+
+  const getBadge = (packageId: string): BadgeType => {
+    const p = progressMap?.[packageId];
+    const isClear = p?.isClear === true;
+    const idx = typeof p?.currentIndex === "number" ? p.currentIndex : 0;
+
+    if (isClear) return "clear";
+    if (idx > 0) return "progress";
+    return "not_started";
   };
 
   if (loading) return <div className={styles.loading}>불러오는 중…</div>;
@@ -160,79 +158,71 @@ export default function HomePage() {
 
   return (
     <div className={styles.container}>
-      {/* Top App Bar */}
+      {/* AppBar */}
       <header className={styles.appBar}>
         <div className={styles.brand}>Engorish</div>
 
         <div className={styles.appIcons}>
-          {/* 아이콘 파일 없으면 안 보일 수 있어서 alt 텍스트만이라도 남김 */}
-          <button className={styles.iconBtn} type="button" aria-label="report" onClick={() => navigate(`/${variant}/report`)}>
-            <img src="/doc.svg" alt="" />
+          <button className={styles.iconBtn} type="button" aria-label="report" onClick={goReport}>
+            <img src="/report.svg" alt="" />
           </button>
-          <button className={styles.iconBtn} type="button" aria-label="logout">
-            <img src="/logout.svg" alt="" />
+          <button className={styles.iconBtn} type="button" aria-label="logout" onClick={logout}>
+            <img src="/out.svg" alt="" />
           </button>
         </div>
       </header>
 
       <main className={styles.main}>
-        <section className={styles.section}>
-          <h2 className={styles.sectionTitle}>진행중인 학습</h2>
+        <h2 className={styles.pageTitle}>캠퍼스 영어</h2>
 
-          {/* package row */}
-          <div className={styles.pkgRow}>
-            <div className={styles.pkgName}>{activePackage?.title ?? "패키지명"}</div>
+        {/* Category tabs */}
+        <div className={styles.tabs}>
+          {categories.map((c) => {
+            const on = c.category_id === activeCategoryId;
+            return (
+              <button
+                key={c.category_id}
+                type="button"
+                className={`${styles.tab} ${on ? styles.tabOn : styles.tabOff}`}
+                onClick={() => setActiveCategoryId(c.category_id)}
+              >
+                {c.name}
+              </button>
+            );
+          })}
+        </div>
 
-            {/* ✅ 햄버거 → 카테고리 페이지로 */}
-            <button className={styles.menuBtn} type="button" onClick={goCategories} aria-label="categories">
-              <img src="/menu.svg" alt="" />
-            </button>
-          </div>
+        {/* ✅ Package grid */}
+        <div className={styles.grid}>
+          {packages.map((p) => {
+            const badge = getBadge(p.package_id);
 
-          {/* progress */}
-          <div className={styles.progressRow}>
-            <div className={styles.progressBar}>
-              <div className={styles.progressFill} style={{ width: `${progressRatio * 100}%` }} />
-            </div>
-            <div className={styles.progressText}>{progressText}</div>
-          </div>
+            return (
+              <button
+                key={p.package_id}
+                type="button"
+                className={styles.cardBtn}      // ✅ 새 클래스 추천 (아래 CSS 참고)
+                onClick={() => goPackage(p.package_id)}
+                aria-label={`패키지 열기: ${p.title}`}
+              >
+                <img
+                  className={styles.thumb}
+                  src={imgSrc(p.thumb_url, "/scenario.png")}
+                  alt=""
+                  onError={(e) => {
+                    (e.currentTarget as HTMLImageElement).src = "/scenario.png";
+                  }}
+                />
 
-          {/* list */}
-          <div className={styles.list}>
-            {scenarioList.map((s, idx) => {
-              const unlocked = idx <= currentIndex; // clear + current
-              return (
-                <div key={s.scenario_id} className={styles.row}>
-                  <div className={`${styles.numCircle} ${unlocked ? styles.numOn : styles.numOff}`}>
-                    {idx + 1}
-                  </div>
-
-                  <div className={styles.card}>
-                    <img
-                      className={styles.thumb}
-                      src={imgSrc(s.thumb_url)}
-                      alt={s.title}
-                      onError={(e) => {
-                        (e.currentTarget as HTMLImageElement).src = "/scenario.png";
-                      }}
-                    />
-                    <div className={styles.cardTexts}>
-                      <div className={styles.cardTitle}>{s.title}</div>
-                      <div className={styles.cardDesc}>{s.scenario_desc ?? ""}</div>
-                    </div>
-                  </div>
+                <div className={`${styles.badge} ${styles[`badge_${badge}`]}`}>
+                  {badgeLabel(badge)}
                 </div>
-              );
-            })}
-          </div>
 
-          {/* bottom button */}
-          <div className={styles.bottom}>
-            <button className={styles.cta} type="button" onClick={goContinue} disabled={!nextScenario}>
-              이어하기
-            </button>
-          </div>
-        </section>
+                <div className={styles.cardTitle}>{p.title}</div>
+              </button>
+            );
+          })}
+        </div>
       </main>
     </div>
   );

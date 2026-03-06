@@ -1,10 +1,36 @@
-/* src/pages/play/PlayPage.module.css */
-
 .container{
-  min-height:100vh;
+  height: 100vh;          /* ✅ 전체 화면 고정 */
   background:#ffffff;
   display:flex;
   flex-direction:column;
+  overflow: hidden;       /* ✅ body 스크롤 방지 */
+}
+
+/* ✅ 상단은 고정(스크롤 영향 X) */
+.topArea{
+  flex-shrink: 0;
+  background: #fff;
+  z-index: 5;
+}
+
+/* ✅ 채팅 영역만 스크롤 */
+.chatArea{
+  flex: 1;
+  min-height: 0;          /* ✅ 이거 없으면 flex에서 스크롤 깨지는 경우 많음 */
+  overflow-y: auto;       /* ✅ 여기만 스크롤 */
+  padding:12px 16px 10px;
+}
+
+/* ✅ 하단도 고정(스크롤 영향 X) */
+.micArea{
+  flex-shrink: 0;
+  padding:18px 16px 24px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:12px;
+  background:#fff;
+  border-top: 1px solid #eee; /* 있으면 더 안정감 */
 }
 
 /* Loading / Fatal */
@@ -156,12 +182,6 @@
   opacity:0.95;
 }
 
-/* CHAT AREA */
-.chatArea{
-  flex:1;
-  padding:12px 16px 10px;
-  overflow:auto;
-}
 
 .aiWrap{
   display:flex;
@@ -238,15 +258,6 @@
   opacity:0.9;
 }
 
-/* MIC AREA (BOTTOM) */
-.micArea{
-  padding:18px 16px 24px;
-  display:flex;
-  flex-direction:column;
-  align-items:center;
-  gap:12px;
-  background:#fff;
-}
 
 .micHint{
   font-size:13px;

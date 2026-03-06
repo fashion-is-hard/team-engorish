@@ -1,251 +1,544 @@
+// src/pages/report/ReportPage.tsx
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
 import styles from "./ReportPage.module.css";
 
-type SessionRow = {
+type SessionRowLite = {
   session_id: string;
   started_at: string;
+  ended_at: string | null;
+  status: string;
+  variant: string | null;
 };
 
-type TurnRow = {
-  turn_id: string;
-  role: string; // 'user' | 'ai'
+type TurnRowLite = {
+  session_id: string;
+  role: string;
   text_raw: string | null;
   created_at: string;
 };
 
-function tokenize(text: string) {
-  // 영어 기준: 소문자 + 기호 제거 + 공백 split
+function getVariantFromPath(pathname: string): "a" | "b" {
+  return pathname.startsWith("/b") ? "b" : "a";
+}
+
+function normalizeVariant(v: unknown): "a" | "b" {
+  const s = String(v ?? "").trim().toLowerCase();
+  return s === "b" ? "b" : "a";
+}
+
+/** 영어 단어 토크나이저(간단) */
+function tokenizeEn(text: string): string[] {
   return (text || "")
     .toLowerCase()
-    .replace(/[^a-z0-9\s']/g, " ")
+    .replace(/[^a-z'\s]/g, " ")
     .split(/\s+/)
     .map((w) => w.trim())
     .filter(Boolean);
 }
 
-function pad2(n: number) {
-  return String(n).padStart(2, "0");
-}
-function mmss(sec: number) {
-  const m = Math.floor(sec / 60);
-  const s = sec % 60;
-  return `${pad2(m)}:${pad2(s)}`;
-}
-
-type SeriesPoint = { xSec: number; y: number };
-
+// ---------- Simple SVG Area Chart (A용) ----------
 function AreaChart({
-  data,
+  values,
+  stroke,
+  fillId,
   height = 180,
-  stroke = "#ff7b7b",
-  fillId = "grad",
 }: {
-  data: SeriesPoint[];
+  values: number[];
+  stroke: string;
+  fillId: string;
   height?: number;
-  stroke?: string;
-  fillId?: string;
 }) {
-  const width = 320; // viewBox 기준 (반응형은 CSS로)
-  const pad = 12;
+  const width = 320;
+  const padX = 14;
+  const padY = 12;
 
-  const xs = data.map((d) => d.xSec);
-  const ys = data.map((d) => d.y);
+  const maxV = Math.max(1, ...values);
+  const n = Math.max(1, values.length);
 
-  const maxX = Math.max(...xs, 1);
-  const maxY = Math.max(...ys, 1);
+  const pts = values.map((v, i) => {
+    const x = padX + (i * (width - padX * 2)) / Math.max(1, n - 1);
+    const y = padY + (1 - v / maxV) * (height - padY * 2);
+    return { x, y };
+  });
 
-  const xTo = (x: number) => pad + (x / maxX) * (width - pad * 2);
-  const yTo = (y: number) => height - pad - (y / maxY) * (height - pad * 2);
+  const dLine =
+    pts.length === 1
+      ? `M ${pts[0].x} ${pts[0].y}`
+      : `M ${pts[0].x} ${pts[0].y} ` +
+        pts
+          .slice(1)
+          .map((p) => `L ${p.x} ${p.y}`)
+          .join(" ");
 
-  // line path
-  const line = data
-    .map((d, i) => `${i === 0 ? "M" : "L"} ${xTo(d.xSec)} ${yTo(d.y)}`)
-    .join(" ");
-
-  // area path
-  const area =
-    line +
-    ` L ${xTo(data[data.length - 1].xSec)} ${height - pad}` +
-    ` L ${xTo(data[0].xSec)} ${height - pad} Z`;
+  const dArea =
+    pts.length === 0
+      ? ""
+      : `${dLine} L ${pts[pts.length - 1].x} ${height - padY} L ${pts[0].x} ${height - padY} Z`;
 
   return (
-    <svg className={styles.chart} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none">
+    <svg className={styles.chartSvg} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none">
       <defs>
         <linearGradient id={fillId} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={stroke} stopOpacity="0.45" />
-          <stop offset="100%" stopColor={stroke} stopOpacity="0.05" />
+          <stop offset="0%" stopColor={stroke} stopOpacity="0.28" />
+          <stop offset="100%" stopColor={stroke} stopOpacity="0.0" />
         </linearGradient>
       </defs>
 
-      {/* area */}
-      <path d={area} fill={`url(#${fillId})`} stroke="none" />
-
-      {/* line */}
-      <path d={line} fill="none" stroke={stroke} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
+      {pts.length > 0 && <path d={dArea} fill={`url(#${fillId})`} stroke="none" />}
+      {pts.length > 0 && (
+        <path d={dLine} fill="none" stroke={stroke} strokeWidth="2.5" strokeLinejoin="round" />
+      )}
     </svg>
   );
 }
 
+// ===================== B용 타입/컴포넌트 =====================
+type ReportResponseB = {
+  ok: boolean;
+  totals: {
+    sessions: number;
+    avg: { c: number; a: number; f: number; p: number; overall: number };
+    latest: { c: number; a: number; f: number; p: number; overall: number } | null;
+  };
+  series: Array<{
+    session_id: string;
+    ended_at: string | null;
+    variant: "a" | "b";
+    c: number;
+    a: number;
+    f: number;
+    p: number;
+    overall: number;
+  }>;
+  insight: {
+    summary: string;
+    detail: { strengths: string[]; improvements: string[] };
+  };
+};
+
+function clamp(n: number, lo: number, hi: number) {
+  return Math.max(lo, Math.min(hi, n));
+}
+
+function Radar({ c, a, f, p }: { c: number; a: number; f: number; p: number }) {
+  const size = 140;
+  const cx = size / 2;
+  const cy = size / 2;
+  const r = 52;
+
+  const toPt = (angleDeg: number, value: number) => {
+    const v = clamp(value, 0, 100) / 100;
+    const rad = (Math.PI / 180) * angleDeg;
+    return { x: cx + Math.cos(rad) * r * v, y: cy + Math.sin(rad) * r * v };
+  };
+
+  const ptC = toPt(-90, c);
+  const ptP = toPt(0, p);
+  const ptF = toPt(90, f);
+  const ptA = toPt(180, a);
+
+  const poly = `${ptC.x},${ptC.y} ${ptP.x},${ptP.y} ${ptF.x},${ptF.y} ${ptA.x},${ptA.y}`;
+
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+      {[0.25, 0.5, 0.75, 1].map((k, i) => (
+        <polygon
+          key={i}
+          points={`${cx},${cy - r * k} ${cx + r * k},${cy} ${cx},${cy + r * k} ${cx - r * k},${cy}`}
+          fill="none"
+          stroke="rgba(0,0,0,0.08)"
+        />
+      ))}
+      <line x1={cx} y1={cy - r} x2={cx} y2={cy + r} stroke="rgba(0,0,0,0.08)" />
+      <line x1={cx - r} y1={cy} x2={cx + r} y2={cy} stroke="rgba(0,0,0,0.08)" />
+
+      <polygon points={poly} fill="rgba(153,169,190,0.45)" stroke="rgba(153,169,190,1)" />
+
+      <text x={cx} y={cy - r - 8} textAnchor="middle" fontSize="12" fill="#4E555E">
+        C
+      </text>
+      <text x={cx - r - 10} y={cy + 4} textAnchor="middle" fontSize="12" fill="#4E555E">
+        A
+      </text>
+      <text x={cx} y={cy + r + 16} textAnchor="middle" fontSize="12" fill="#4E555E">
+        F
+      </text>
+      <text x={cx + r + 12} y={cy + 4} textAnchor="middle" fontSize="12" fill="#4E555E">
+        P
+      </text>
+    </svg>
+  );
+}
+
+function Bars({ c, a, f, p }: { c: number; a: number; f: number; p: number }) {
+  const rows = [
+    { k: "C", v: c },
+    { k: "A", v: a },
+    { k: "F", v: f },
+    { k: "P", v: p },
+  ];
+
+  return (
+    <div className={styles.bars}>
+      {rows.map((r) => (
+        <div key={r.k} className={styles.barRow}>
+          <div className={styles.barLabel}>{r.k}</div>
+          <div className={styles.barTrack}>
+            <div className={styles.barFill} style={{ width: `${clamp(r.v, 0, 100)}%` }} />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function MiniArea({ values }: { values: number[] }) {
+  const w = 140;
+  const h = 70;
+  const pad = 6;
+
+  if (!values.length) return <div className={styles.miniEmpty}>-</div>;
+
+  const xs = values.map((_, i) => (values.length === 1 ? w / 2 : (i / (values.length - 1)) * (w - pad * 2) + pad));
+  const ys = values.map((v) => {
+    const t = clamp(v, 0, 100) / 100;
+    return (1 - t) * (h - pad * 2) + pad;
+  });
+
+  const line = xs.map((x, i) => `${x},${ys[i]}`).join(" ");
+  const area = `${pad},${h - pad} ${line} ${w - pad},${h - pad}`;
+
+  return (
+    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`}>
+      <polygon points={area} fill="rgba(153,169,190,0.35)" />
+      <polyline points={line} fill="none" stroke="rgba(153,169,190,1)" strokeWidth="2" />
+    </svg>
+  );
+}
+
+// ===================== Page =====================
 export default function ReportPage() {
   const navigate = useNavigate();
-  const { sessionId } = useParams();
+  const location = useLocation();
+  const variant = useMemo(() => getVariantFromPath(location.pathname), [location.pathname]);
+  const isB = variant === "b";
 
   const [loading, setLoading] = useState(true);
   const [fatal, setFatal] = useState<string | null>(null);
 
-  const [session, setSession] = useState<SessionRow | null>(null);
-  const [turns, setTurns] = useState<TurnRow[]>([]);
+  // A용: 누적 단어
+  const [newWordsCum, setNewWordsCum] = useState<number[]>([]);
+  const [spokenWordsCum, setSpokenWordsCum] = useState<number[]>([]);
+
+  // B용: CAFP/인사이트/추이
+  const [bData, setBData] = useState<ReportResponseB | null>(null);
 
   useEffect(() => {
-    if (!sessionId) {
-      setFatal("sessionId가 없습니다.");
-      setLoading(false);
-      return;
-    }
+    let cancelled = false;
 
     (async () => {
-      setLoading(true);
-      setFatal(null);
+      try {
+        setLoading(true);
+        setFatal(null);
 
-      const { data: auth } = await supabase.auth.getUser();
-      if (!auth.user) {
-        navigate("/login");
-        return;
-      }
-
-      const { data: sData, error: sErr } = await supabase
-        .from("roleplay_sessions")
-        .select("session_id,started_at")
-        .eq("session_id", sessionId)
-        .single();
-
-      if (sErr) {
-        setFatal(sErr.message);
-        setLoading(false);
-        return;
-      }
-      setSession(sData as SessionRow);
-
-      const { data: tData, error: tErr } = await supabase
-        .from("roleplay_turns")
-        .select("turn_id,role,text_raw,created_at")
-        .eq("session_id", sessionId)
-        .order("created_at", { ascending: true });
-
-      if (tErr) {
-        setFatal(tErr.message);
-        setLoading(false);
-        return;
-      }
-
-      setTurns((tData ?? []) as TurnRow[]);
-      setLoading(false);
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId]);
-
-  // ===== 데이터 가공: x축=플레이타임(초), y축=단어 수 =====
-  const { newWordsSeries, totalWordsSeries, totalDurationSec } = useMemo(() => {
-    const startMs = session?.started_at ? new Date(session.started_at).getTime() : null;
-
-    if (!startMs) {
-      return {
-        newWordsSeries: [{ xSec: 0, y: 0 }],
-        totalWordsSeries: [{ xSec: 0, y: 0 }],
-        totalDurationSec: 0,
-      };
-    }
-
-    // 사용자 발화만 집계
-    const userTurns = turns.filter((t) => t.role === "user" && (t.text_raw ?? "").trim());
-
-    // 1분 버킷(원하면 30초로 바꿔도 됨)
-    const BUCKET_SEC = 60;
-
-    const seen = new Set<string>();
-    const newPerBucket = new Map<number, number>();  // bucketIndex -> new words
-    const totalPerBucket = new Map<number, number>(); // bucketIndex -> total words (bucket sum)
-
-    let lastSec = 0;
-
-    for (const t of userTurns) {
-      const ms = new Date(t.created_at).getTime();
-      const sec = Math.max(0, Math.floor((ms - startMs) / 1000));
-      lastSec = Math.max(lastSec, sec);
-
-      const bucket = Math.floor(sec / BUCKET_SEC);
-
-      const words = tokenize(t.text_raw ?? "");
-      let newCount = 0;
-
-      for (const w of words) {
-        if (!seen.has(w)) {
-          seen.add(w);
-          newCount += 1;
+        const { data: auth } = await supabase.auth.getUser();
+        const user = auth.user;
+        if (!user) {
+          navigate("/auth/login");
+          return;
         }
+
+        // =========================
+        // ✅ B 리포트: Edge Function
+        // =========================
+        if (isB) {
+          const { data: sess } = await supabase.auth.getSession();
+          const accessToken = sess.session?.access_token;
+
+          const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
+          const fnUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/report_insight`;
+
+          const res = await fetch(fnUrl, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Accept: "application/json",
+              apikey: anonKey,
+              ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+            },
+            body: JSON.stringify({}),
+          });
+
+          const text = await res.text();
+          let json: any = null;
+          try {
+            json = JSON.parse(text);
+          } catch {
+            json = { raw: text };
+          }
+
+          if (!res.ok) throw new Error(`report_insight ${res.status}: ${JSON.stringify(json)}`);
+
+          if (cancelled) return;
+          setBData(json as ReportResponseB);
+          setLoading(false);
+          return;
+        }
+
+        // =========================
+        // ✅ A 리포트: 기존 단어 누적
+        // =========================
+        // variant 컬럼이 "A"/"a" 혼재해도 대응
+        // (원하면 필터 제거하고 전부 계산해도 됨)
+        const { data: sData, error: sErr } = await supabase
+          .from("roleplay_sessions")
+          .select("session_id,started_at,ended_at,status,variant")
+          .eq("user_id", user.id)
+          .order("started_at", { ascending: true });
+
+        if (sErr) throw new Error(sErr.message);
+        const allSessions = (sData ?? []) as SessionRowLite[];
+
+        // A만 필터
+        const sessions = allSessions.filter((s) => normalizeVariant(s.variant) === "a");
+
+        if (sessions.length === 0) {
+          if (cancelled) return;
+          setNewWordsCum([]);
+          setSpokenWordsCum([]);
+          setLoading(false);
+          return;
+        }
+
+        const sessionIds = sessions.map((s) => s.session_id);
+
+        // roleplay_turns에서 user 발화만 가져오기 (chunk in)
+        const allTurns: TurnRowLite[] = [];
+        const chunkSize = 50;
+
+        for (let i = 0; i < sessionIds.length; i += chunkSize) {
+          const chunk = sessionIds.slice(i, i + chunkSize);
+
+          const { data: tData, error: tErr } = await supabase
+            .from("roleplay_turns")
+            .select("session_id,role,text_raw,created_at")
+            .in("session_id", chunk)
+            .eq("role", "user")
+            .order("created_at", { ascending: true });
+
+          if (tErr) throw new Error(tErr.message);
+          allTurns.push(...((tData ?? []) as TurnRowLite[]));
+        }
+
+        // session별 unique / total
+        const uniqueMap = new Map<string, Set<string>>();
+        const totalMap = new Map<string, number>();
+        for (const sid of sessionIds) {
+          uniqueMap.set(sid, new Set());
+          totalMap.set(sid, 0);
+        }
+
+        for (const t of allTurns) {
+          const sid = t.session_id;
+          const set = uniqueMap.get(sid);
+          if (!set) continue;
+
+          const tokens = tokenizeEn(t.text_raw ?? "");
+          totalMap.set(sid, (totalMap.get(sid) ?? 0) + tokens.length);
+          for (const w of tokens) set.add(w);
+        }
+
+        // 누적 합
+        const newCum: number[] = [];
+        const spokenCum: number[] = [];
+        let accNew = 0;
+        let accSpoken = 0;
+
+        for (const s of sessions) {
+          const u = uniqueMap.get(s.session_id) ?? new Set<string>();
+          const tot = totalMap.get(s.session_id) ?? 0;
+
+          accNew += u.size;
+          accSpoken += tot;
+
+          newCum.push(accNew);
+          spokenCum.push(accSpoken);
+        }
+
+        if (cancelled) return;
+        setNewWordsCum(newCum);
+        setSpokenWordsCum(spokenCum);
+        setLoading(false);
+      } catch (e: any) {
+        if (cancelled) return;
+        setFatal(e?.message ?? "알 수 없는 오류");
+        setLoading(false);
       }
+    })();
 
-      newPerBucket.set(bucket, (newPerBucket.get(bucket) ?? 0) + newCount);
-      totalPerBucket.set(bucket, (totalPerBucket.get(bucket) ?? 0) + words.length);
-    }
+    return () => {
+      cancelled = true;
+    };
+  }, [navigate, isB]);
 
-    const maxBucket = Math.max(0, Math.floor(lastSec / BUCKET_SEC));
-
-    const newSeries: SeriesPoint[] = [];
-    const totalSeries: SeriesPoint[] = [];
-
-    let cumulative = 0;
-
-    for (let b = 0; b <= maxBucket; b++) {
-      const xSec = b * BUCKET_SEC;
-      const newW = newPerBucket.get(b) ?? 0;
-      const tot = totalPerBucket.get(b) ?? 0;
-
-      cumulative += tot;
-
-      newSeries.push({ xSec, y: newW });
-      totalSeries.push({ xSec, y: cumulative });
-    }
-
-    // 데이터가 없을 때도 차트가 렌더되게
-    if (newSeries.length === 0) newSeries.push({ xSec: 0, y: 0 });
-    if (totalSeries.length === 0) totalSeries.push({ xSec: 0, y: 0 });
-
-    return { newWordsSeries: newSeries, totalWordsSeries: totalSeries, totalDurationSec: lastSec };
-  }, [session?.started_at, turns]);
-
+  // 공통
   if (loading) return <div className={styles.loading}>불러오는 중…</div>;
   if (fatal) return <div className={styles.loading}>에러: {fatal}</div>;
 
+  // =========================
+  // ✅ B UI
+  // =========================
+  if (isB) {
+    const totals = bData?.totals;
+    const avg = totals?.avg ?? { c: 0, a: 0, f: 0, p: 0, overall: 0 };
+
+    const series = bData?.series ?? [];
+    const nameLabel = "00"; // 추후 프로필 이름 연결하면 교체
+
+    const seriesC = series.map((x) => x.c);
+    const seriesA = series.map((x) => x.a);
+    const seriesF = series.map((x) => x.f);
+    const seriesP = series.map((x) => x.p);
+
+    return (
+      <div className={styles.container}>
+        {/* Header */}
+        <div className={styles.header}>
+          <button className={styles.back} onClick={() => navigate(-1)} aria-label="back">
+            <img src="/back.png" alt="뒤로가기" />
+          </button>
+          <div className={styles.headerTitle}>성취탭</div>
+          <div style={{ width: 44 }} />
+        </div>
+
+        <div className={styles.body}>
+          {/* 종합 인사이트 */}
+          <div className={styles.section}>
+            <div className={styles.sectionTitle}>종합 인사이트</div>
+            <div className={styles.insightCard}>
+              <div className={styles.insightBadge}>한문장 요약</div>
+              <div className={styles.insightText}>{bData?.insight?.summary ?? "요약을 준비 중이에요."}</div>
+
+              {!!(bData?.insight?.detail?.strengths?.length) && (
+                <ul className={styles.insightList}>
+                  {bData!.insight.detail.strengths.slice(0, 2).map((t, i) => (
+                    <li key={`s-${i}`}>{t}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+
+          {/* 종합 점수 */}
+          <div className={styles.section} style={{ marginTop: 18 }}>
+            <div className={styles.sectionTitle}>종합 점수</div>
+
+            <div className={styles.scoreCard}>
+              <div className={styles.scoreLeft}>
+                <Bars c={avg.c} a={avg.a} f={avg.f} p={avg.p} />
+              </div>
+              <div className={styles.scoreRight}>
+                <Radar c={avg.c} a={avg.a} f={avg.f} p={avg.p} />
+              </div>
+            </div>
+          </div>
+
+          {/* 성장 */}
+          <div className={styles.section} style={{ marginTop: 18 }}>
+            <div className={styles.sectionTitle}>나의 성장</div>
+
+            <div className={styles.miniGrid}>
+              <div className={styles.miniCard}>
+                <div className={styles.miniTitle}>Complexity</div>
+                <MiniArea values={seriesC} />
+              </div>
+              <div className={styles.miniCard}>
+                <div className={styles.miniTitle}>Accuracy</div>
+                <MiniArea values={seriesA} />
+              </div>
+              <div className={styles.miniCard}>
+                <div className={styles.miniTitle}>Fluency</div>
+                <MiniArea values={seriesF} />
+              </div>
+              <div className={styles.miniCard}>
+                <div className={styles.miniTitle}>Pronunciation</div>
+                <MiniArea values={seriesP} />
+              </div>
+            </div>
+          </div>
+
+          {/* 더 나아지기 위해서 */}
+          <div className={styles.section} style={{ marginTop: 18 }}>
+            <div className={styles.sectionTitle}>더 나아지기 위해서</div>
+            <div className={styles.improveCard}>
+              <div className={styles.improveBadge}>개선점 요약</div>
+              <ul className={styles.insightList}>
+                {(bData?.insight?.detail?.improvements ?? []).slice(0, 3).map((t, i) => (
+                  <li key={`i-${i}`}>{t}</li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <div style={{ height: 24 }} />
+      </div>
+    );
+  }
+
+  // =========================
+  // ✅ A UI (기존)
+  // =========================
+  const totalPlays = newWordsCum.length;
+  const latestNew = totalPlays ? newWordsCum[totalPlays - 1] : 0;
+  const latestSpoken = totalPlays ? spokenWordsCum[totalPlays - 1] : 0;
+
+  const BLUE_GRAY = "#8FA0B8";
+
   return (
     <div className={styles.container}>
-      {/* header */}
+      {/* Header */}
       <div className={styles.header}>
         <button className={styles.back} onClick={() => navigate(-1)} aria-label="back">
           <img src="/back.png" alt="뒤로가기" />
         </button>
-        <h1>성취탭</h1>
+        <div className={styles.headerTitle}>성취탭</div>
+        <div style={{ width: 44 }} />
       </div>
 
-      {/* section 1 */}
-      <div className={styles.sectionTitle}>새로 말한 단어 수</div>
-      <div className={styles.card}>
-        <AreaChart data={newWordsSeries} stroke="#ff7b7b" fillId="gradRed" />
-        <div className={styles.axisHint}>
-          x축: 플레이 타임(0 → {mmss(totalDurationSec)})
+      <div className={styles.body}>
+        {/* Section 1 */}
+        <div className={styles.section}>
+          <div className={styles.sectionTitle}>새로운 단어</div>
+          <div className={styles.sectionValue}>{latestNew}</div>
+
+          <div className={styles.card}>
+            {totalPlays === 0 ? (
+              <div className={styles.empty}>아직 플레이 기록이 없어요.</div>
+            ) : (
+              <AreaChart values={newWordsCum} stroke={BLUE_GRAY} fillId="grad_new" />
+            )}
+          </div>
+        </div>
+
+        {/* Section 2 */}
+        <div className={styles.section} style={{ marginTop: 18 }}>
+          <div className={styles.sectionTitle}>말한 단어</div>
+          <div className={styles.sectionValue}>{latestSpoken}</div>
+
+          <div className={styles.card}>
+            {totalPlays === 0 ? (
+              <div className={styles.empty}>아직 플레이 기록이 없어요.</div>
+            ) : (
+              <AreaChart values={spokenWordsCum} stroke={BLUE_GRAY} fillId="grad_spoken" />
+            )}
+          </div>
         </div>
       </div>
 
-      {/* section 2 */}
-      <div className={styles.sectionTitle}>지금까지 말한 단어 수</div>
-      <div className={styles.card}>
-        <AreaChart data={totalWordsSeries} stroke="#5ecf90" fillId="gradGreen" />
-        <div className={styles.axisHint}>
-          x축: 플레이 타임(0 → {mmss(totalDurationSec)})
-        </div>
-      </div>
+      <div style={{ height: 24 }} />
     </div>
   );
 }
