@@ -6,6 +6,8 @@ import { supabase } from "@/lib/supabaseClient";
 
 type FieldKey = "email" | "password" | "gender" | "age" | "stage" | "agree";
 
+const SIGNUP_PROFILE_STORAGE_KEY = "signup_profile_pending";
+
 export default function SignupPage() {
   const navigate = useNavigate();
 
@@ -121,11 +123,8 @@ export default function SignupPage() {
 
     try {
       const normalizedEmail = email.trim().toLowerCase();
+      const displayNameCandidate = normalizedEmail.split("@")[0] || normalizedEmail;
 
-      // 이메일 @ 앞부분을 display_name으로 사용
-      const displayName = normalizedEmail.split("@")[0] || normalizedEmail;
-
-      // 1) Auth 회원가입
       const { data, error } = await supabase.auth.signUp({
         email: normalizedEmail,
         password,
@@ -136,32 +135,20 @@ export default function SignupPage() {
         return;
       }
 
-      const userId = data.user.id;
+      // 로그인 직후 profiles 업데이트에 사용할 임시 정보 저장
+      localStorage.setItem(
+        SIGNUP_PROFILE_STORAGE_KEY,
+        JSON.stringify({
+          email: normalizedEmail,
+          display_name_candidate: displayNameCandidate,
+          gender,
+          age_range: age,
+          exchange_stage: stage,
+          saved_at: Date.now(),
+        })
+      );
 
-      // 2) profiles 반영
-      const payload = {
-        id: userId,
-        display_name: displayName,
-        gender,
-        age_range: age,
-        exchange_stage: stage,
-      };
-
-      // update 먼저 시도
-      const upd = await supabase.from("profiles").update(payload).eq("id", userId);
-
-      // update 에러거나 반영 row가 없으면 upsert로 처리
-      if (upd.error || (typeof upd.count === "number" && upd.count === 0)) {
-        const { error: upsertError } = await supabase
-          .from("profiles")
-          .upsert(payload, { onConflict: "id" });
-
-        if (upsertError) {
-          console.error("profiles upsert error:", upsertError);
-        }
-      }
-
-      alert("회원가입이 완료 되었습니다! 로그인 페이지로 이동합니다.");
+      alert("회원가입이 완료되었습니다. 로그인 후 정보가 최종 저장됩니다.");
       navigate("/auth/login", { replace: true });
     } catch (err) {
       console.error(err);

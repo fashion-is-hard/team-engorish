@@ -7,6 +7,17 @@ import { supabase } from "@/lib/supabaseClient";
 type AbVariantDB = "A" | "B";
 type VariantPath = "a" | "b";
 
+type PendingSignupProfile = {
+  email?: string;
+  display_name_candidate?: string;
+  gender?: string;
+  age_range?: string;
+  exchange_stage?: string;
+  saved_at?: number;
+};
+
+const SIGNUP_PROFILE_STORAGE_KEY = "signup_profile_pending";
+
 function toVariantPath(v: AbVariantDB | null | undefined): VariantPath {
   return v === "B" ? "b" : "a";
 }
@@ -20,6 +31,50 @@ async function fetchVariantPath(userId: string): Promise<VariantPath> {
 
   if (error) throw error;
   return toVariantPath(data?.ab_variant as AbVariantDB | null);
+}
+
+function readPendingSignupProfile(): PendingSignupProfile | null {
+  try {
+    const raw = localStorage.getItem(SIGNUP_PROFILE_STORAGE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as PendingSignupProfile;
+  } catch (error) {
+    console.error("pending signup profile parse error:", error);
+    return null;
+  }
+}
+
+async function applyPendingSignupProfile(userId: string, userEmail?: string | null) {
+  const pending = readPendingSignupProfile();
+  if (!pending) return;
+
+  const normalizedUserEmail = (userEmail ?? "").trim().toLowerCase();
+  const normalizedPendingEmail = (pending.email ?? "").trim().toLowerCase();
+
+  // 다른 이메일로 로그인한 경우 잘못 반영되지 않도록 방지
+  if (!normalizedUserEmail || !normalizedPendingEmail) return;
+  if (normalizedUserEmail !== normalizedPendingEmail) return;
+
+  const displayName =
+    pending.display_name_candidate ||
+    normalizedUserEmail.split("@")[0] ||
+    normalizedUserEmail;
+
+  const { error } = await supabase
+    .from("profiles")
+    .update({
+      display_name: displayName,
+      gender: pending.gender ?? null,
+      age_range: pending.age_range ?? null,
+      exchange_stage: pending.exchange_stage ?? null,
+    })
+    .eq("id", userId);
+
+  if (error) {
+    throw error;
+  }
+
+  localStorage.removeItem(SIGNUP_PROFILE_STORAGE_KEY);
 }
 
 export default function LoginPage() {
@@ -39,7 +94,6 @@ export default function LoginPage() {
   const emailError = useMemo(() => {
     if (!touched.email) return "";
     if (!email.trim()) return "ID를 바르게 입력해주세요";
-    // 아주 느슨한 이메일 체크 (필요하면 더 엄격하게)
     if (!/^\S+@\S+\.\S+$/.test(email.trim())) return "ID를 바르게 입력해주세요";
     return "";
   }, [email, touched.email]);
@@ -64,16 +118,18 @@ export default function LoginPage() {
     e.preventDefault();
     setFormError(null);
 
-    // 제출 시 에러 표시 강제
     setTouched({ email: true, password: true });
 
     if (!email.trim() || !password) return;
     if (emailError || passwordError) return;
 
     setLoading(true);
+
     try {
+      const normalizedEmail = email.trim().toLowerCase();
+
       const { data, error } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
+        email: normalizedEmail,
         password,
       });
 
@@ -82,16 +138,28 @@ export default function LoginPage() {
         return;
       }
 
-      // ✅ 로그인 성공 → profiles.ab_variant 읽고 A/B 홈으로
+      // 회원가입 직후 임시 저장된 프로필 정보가 있으면 여기서 최종 반영
+      try {
+        await applyPendingSignupProfile(data.user.id, data.user.email);
+      } catch (profileError) {
+        console.error("profiles update after login error:", profileError);
+        setFormError("로그인은 되었지만 추가 정보 저장에 실패했습니다. 다시 로그인해 주세요.");
+        return;
+      }
+
+      // ab_variant 읽어서 A/B 홈으로 이동
       let variantPath: VariantPath = "a";
       try {
         variantPath = await fetchVariantPath(data.user.id);
-      } catch {
-        // profiles 생성 타이밍 이슈 등 대비: 기본 A
+      } catch (variantError) {
+        console.error("fetchVariantPath error:", variantError);
         variantPath = "a";
       }
 
       navigate(`/${variantPath}/home`, { replace: true });
+    } catch (error) {
+      console.error(error);
+      setFormError("로그인 중 오류가 발생했습니다. 다시 시도해 주세요.");
     } finally {
       setLoading(false);
     }
