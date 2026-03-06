@@ -46,32 +46,52 @@ function readPendingSignupProfile(): PendingSignupProfile | null {
 
 async function applyPendingSignupProfile(userId: string, userEmail?: string | null) {
   const pending = readPendingSignupProfile();
+  console.log("pending profile:", pending);
+
   if (!pending) return;
 
   const normalizedUserEmail = (userEmail ?? "").trim().toLowerCase();
   const normalizedPendingEmail = (pending.email ?? "").trim().toLowerCase();
 
-  // 다른 이메일로 로그인한 경우 잘못 반영되지 않도록 방지
-  if (!normalizedUserEmail || !normalizedPendingEmail) return;
-  if (normalizedUserEmail !== normalizedPendingEmail) return;
+  if (!normalizedUserEmail || !normalizedPendingEmail) {
+    throw new Error("이메일 정보가 비어 있습니다.");
+  }
+
+  if (normalizedUserEmail !== normalizedPendingEmail) {
+    throw new Error("회원가입 이메일과 로그인 이메일이 일치하지 않습니다.");
+  }
 
   const displayName =
     pending.display_name_candidate ||
     normalizedUserEmail.split("@")[0] ||
     normalizedUserEmail;
 
-  const { error } = await supabase
-    .from("profiles")
-    .update({
-      display_name: displayName,
-      gender: pending.gender ?? null,
-      age_group: pending.age_group ?? null,
-      exchange_stage: pending.exchange_stage ?? null,
-    })
-    .eq("id", userId);
+  const payload = {
+    display_name: displayName,
+    gender: pending.gender ?? null,
+    age_group: pending.age_group ?? null,
+    exchange_stage: pending.exchange_stage ?? null,
+  };
 
-  if (error) {
-    throw error;
+  console.log("profiles update payload:", payload);
+  console.log("profiles update userId:", userId);
+
+  const result = await supabase
+    .from("profiles")
+    .update(payload)
+    .eq("id", userId)
+    .select();
+
+  console.log("profiles update full result:", result);
+
+  if (result.error) {
+    throw new Error(
+      `[profiles update] code=${result.error.code} message=${result.error.message} details=${result.error.details ?? ""} hint=${result.error.hint ?? ""}`
+    );
+  }
+
+  if (!result.data || result.data.length === 0) {
+    throw new Error("profiles row를 찾지 못했거나 update 결과가 0건입니다.");
   }
 
   localStorage.removeItem(SIGNUP_PROFILE_STORAGE_KEY);
