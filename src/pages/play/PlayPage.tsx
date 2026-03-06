@@ -584,13 +584,14 @@ export default function PlayPage() {
     listeningStartedAtRef.current = Date.now();
 
     const mobile = isMobileDevice();
+    const ios = /iPhone|iPad|iPod/i.test(navigator.userAgent);
 
     const rec: SpeechRecognitionLike = new Ctor();
     recognitionRef.current = rec;
 
     rec.lang = "en-US";
-    rec.continuous = !mobile;
-    rec.interimResults = !mobile;
+    rec.continuous = ios ? false: !mobile;;
+    rec.interimResults = ios ? false: !mobile;
     rec.maxAlternatives = 1;
 
     rec.onstart = () => {
