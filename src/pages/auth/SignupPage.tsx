@@ -142,7 +142,7 @@ export default function SignupPage() {
           email: normalizedEmail,
           display_name_candidate: displayNameCandidate,
           gender,
-          age_range: age,
+          age_group: age,
           exchange_stage: stage,
           saved_at: Date.now(),
         })

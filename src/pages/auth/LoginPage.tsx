@@ -11,7 +11,7 @@ type PendingSignupProfile = {
   email?: string;
   display_name_candidate?: string;
   gender?: string;
-  age_range?: string;
+  age_group?: string;
   exchange_stage?: string;
   saved_at?: number;
 };
@@ -65,7 +65,7 @@ async function applyPendingSignupProfile(userId: string, userEmail?: string | nu
     .update({
       display_name: displayName,
       gender: pending.gender ?? null,
-      age_range: pending.age_range ?? null,
+      age_group: pending.age_group ?? null,
       exchange_stage: pending.exchange_stage ?? null,
     })
     .eq("id", userId);
