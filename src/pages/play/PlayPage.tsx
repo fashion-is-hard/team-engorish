@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
+import {
+  RealtimeVoiceClient,
+  extractRealtimeAssistantText,
+  extractRealtimeUserText,
+} from "@/lib/realtimeClient";
 import styles from "./PlayPage.module.css";
 
 type VariantPath = "a" | "b";
@@ -17,9 +22,6 @@ type Msg = {
   text: string;
   createdAt: number;
   correctedText?: string | null;
-  translatedText?: string | null;
-  audioUrl?: string | null;
-  canAutoplay?: boolean;
 };
 
 type SessionRow = {
@@ -68,8 +70,6 @@ type DbTurn = {
   role: string;
   text_raw: string | null;
   text_corrected: string | null;
-  text_translated: string | null;
-  audio_url: string | null;
   created_at: string;
 };
 
@@ -85,36 +85,9 @@ type ScenarioGoalRow = {
   created_at: string;
 };
 
-type SpeechRecognitionLike = {
-  lang: string;
-  continuous: boolean;
-  interimResults: boolean;
-  maxAlternatives: number;
-  onstart: null | (() => void);
-  onend: null | (() => void);
-  onerror: null | ((e: any) => void);
-  onresult: null | ((e: any) => void);
-  start: () => void;
-  stop: () => void;
-};
-
-function getSpeechRecognitionCtor(): any {
-  const w = window as any;
-  return w.SpeechRecognition || w.webkitSpeechRecognition || null;
-}
-
-function isMobileDevice() {
-  const ua = navigator.userAgent || "";
-  return /Android|iPhone|iPad|iPod/i.test(ua);
-}
-
 function isIOS() {
   const ua = navigator.userAgent || "";
   return /iPhone|iPad|iPod/i.test(ua);
-}
-
-function supportsSpeechRecognition() {
-  return !!getSpeechRecognitionCtor();
 }
 
 function pad2(n: number) {
@@ -146,32 +119,24 @@ export default function PlayPage() {
   const [scenario, setScenario] = useState<ScenarioRow | null>(null);
   const [npc, setNpc] = useState<NpcRow | null>(null);
 
-  const variant: VariantPath = normalizeVariant(session?.variant ?? pathVariant);
-  const isB = variant === "b";
-
   const [elapsedSec, setElapsedSec] = useState(0);
   const [hasUserStarted, setHasUserStarted] = useState(false);
 
   const [goals, setGoals] = useState<ScenarioGoalRow[]>([]);
   const [checkedGoalIds, setCheckedGoalIds] = useState<Record<string, boolean>>({});
 
-  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
-  const finalTranscriptRef = useRef<string>("");
-  const listeningStartedAtRef = useRef<number>(0);
-  const [interimText, setInterimText] = useState<string>("");
-
-  const [speechSupported, setSpeechSupported] = useState(true);
   const [isAiSpeaking, setIsAiSpeaking] = useState(false);
-  const [isAiVoicePending, setIsAiVoicePending] = useState(false);
+  const [connecting, setConnecting] = useState(false);
 
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
-  const audioUnlockedRef = useRef(false);
-  const currentAudioRef = useRef<HTMLAudioElement | null>(null);
-  const endTimerRef = useRef<number | null>(null);
+  const realtimeRef = useRef<RealtimeVoiceClient | null>(null);
   const endingRef = useRef(false);
-  const startHandledRef = useRef(false);
+  const lastUserTextRef = useRef<string>("");
+
+  const variant: VariantPath = normalizeVariant(session?.variant ?? pathVariant);
+  const isB = variant === "b";
 
   const turnLimit = useMemo(() => session?.turn_limit ?? 20, [session?.turn_limit]);
 
@@ -199,10 +164,6 @@ export default function PlayPage() {
   );
 
   useEffect(() => {
-    setSpeechSupported(supportsSpeechRecognition());
-  }, []);
-
-  useEffect(() => {
     const t = setInterval(() => {
       if (session?.status === "active") setElapsedSec((v) => v + 1);
     }, 1000);
@@ -213,48 +174,13 @@ export default function PlayPage() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
     const el = chatScrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [messages.length, interimText]);
+  }, [messages.length]);
 
   useEffect(() => {
     return () => {
-      try {
-        recognitionRef.current?.stop();
-      } catch {}
-      try {
-        currentAudioRef.current?.pause();
-        currentAudioRef.current = null;
-      } catch {}
-      if (endTimerRef.current) window.clearTimeout(endTimerRef.current);
+      realtimeRef.current?.close();
     };
   }, []);
-
-  function wait(ms: number) {
-    return new Promise<void>((resolve) => {
-      endTimerRef.current = window.setTimeout(() => resolve(), ms);
-    });
-  }
-
-  async function waitForAudioEnd(maxMs = 15000) {
-    const a = currentAudioRef.current;
-    if (!a) return;
-    if (a.paused || a.ended) return;
-
-    await new Promise<void>((resolve) => {
-      let done = false;
-
-      const finish = () => {
-        if (done) return;
-        done = true;
-        a.removeEventListener("ended", finish);
-        a.removeEventListener("pause", finish);
-        resolve();
-      };
-
-      a.addEventListener("ended", finish, { once: true });
-      a.addEventListener("pause", finish, { once: true });
-      window.setTimeout(() => finish(), maxMs);
-    });
-  }
 
   async function getNextTurnNo(): Promise<number> {
     if (!sessionId) return 1;
@@ -270,75 +196,25 @@ export default function PlayPage() {
     return (data?.[0]?.turn_no ?? 0) + 1;
   }
 
-  function attachAudioLifecycle(a: HTMLAudioElement) {
-    a.onplay = () => setIsAiSpeaking(true);
-    a.onended = () => setIsAiSpeaking(false);
-    a.onpause = () => setIsAiSpeaking(false);
-    a.onerror = () => setIsAiSpeaking(false);
-  }
-
-  function stopAnyAudio() {
-    try {
-      if (currentAudioRef.current) {
-        currentAudioRef.current.pause();
-        currentAudioRef.current.currentTime = 0;
-      }
-    } catch {}
-    currentAudioRef.current = null;
-    setIsAiSpeaking(false);
-  }
-
-  async function tryAutoplay(url: string): Promise<boolean> {
-    try {
-      stopAnyAudio();
-      const a = new Audio(url);
-      a.preload = "auto";
-      (a as any).playsInline = true;
-      attachAudioLifecycle(a);
-      currentAudioRef.current = a;
-      await a.play();
-      return true;
-    } catch {
-      setIsAiSpeaking(false);
-      return false;
-    }
-  }
-
-  async function unlockAudioOnce() {
-    if (audioUnlockedRef.current) return;
-
-    const SILENT_WAV =
-      "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAgD4AAAB9AAACABAAZGF0YQAAAAA=";
-
-    try {
-      const a = new Audio(SILENT_WAV);
-      a.muted = true;
-      (a as any).playsInline = true;
-      await a.play();
-      a.pause();
-      audioUnlockedRef.current = true;
-    } catch {}
-  }
-
   async function endSession(reason: "user_exit" | "turn_limit" | "goals_done") {
     if (!sessionId) return;
     if (endingRef.current) return;
     endingRef.current = true;
 
-    const isUserExit = reason === "user_exit";
+    realtimeRef.current?.stopMic();
+
+    // AI 말 끝까지 대기
+    if (reason !== "user_exit") {
+      const started = Date.now();
+      while (isAiSpeaking && Date.now() - started < 15000) {
+        await new Promise((r) => setTimeout(r, 200));
+      }
+      await new Promise((r) => setTimeout(r, 3000));
+    } else {
+      realtimeRef.current?.close();
+    }
 
     try {
-      try {
-        recognitionRef.current?.stop();
-      } catch {}
-
-      if (!isUserExit) {
-        await waitForAudioEnd(15000);
-        await wait(3000);
-      } else {
-        stopAnyAudio();
-      }
-
       await supabase
         .from("roleplay_sessions")
         .update({ status: "ended", ended_at: new Date().toISOString(), end_reason: reason })
@@ -404,89 +280,135 @@ export default function PlayPage() {
     return json as { achieved_goal_ids: string[] };
   }
 
-  async function generateAiTextWithEdge(userText: string) {
-    const payload = {
-      sessionId,
-      userText,
-      mode: settings?.correction_mode ?? "suggest",
-      difficulty: settings?.difficulty ?? "basic",
-      questionSpeed: settings?.question_speed ?? 1.0,
-      scenarioTitle: scenario?.title ?? "Scenario",
-      scenarioDesc: scenario?.scenario_desc ?? "",
-      npcRoleName: npc?.role_name ?? "NPC",
-      npcRoleDesc: npc?.role_desc ?? "",
-    };
+  async function ensureRealtimeConnected() {
+    if (realtimeRef.current?.isConnected()) return;
 
-    const { data: sess } = await supabase.auth.getSession();
-    const accessToken = sess.session?.access_token;
+    if (!scenario) throw new Error("scenario not loaded");
 
-    const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
-    const fnUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat_text`;
+    setConnecting(true);
 
-    const res = await fetch(fnUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        apikey: anonKey,
-        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+    const client = new RealtimeVoiceClient({
+      tokenEndpoint: `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/realtime_session`,
+      sessionPayload: {
+        scenarioTitle: scenario.title,
+        scenarioDesc: scenario.scenario_desc ?? "",
+        npcRoleName: npc?.role_name ?? "NPC",
+        npcRoleDesc: npc?.role_desc ?? "",
+        difficulty: settings?.difficulty ?? "basic",
+        correctionMode: settings?.correction_mode ?? "suggest",
+        voice: "marin",
       },
-      body: JSON.stringify(payload),
+      onRemoteAudioStart: () => setIsAiSpeaking(true),
+      onRemoteAudioStop: () => setIsAiSpeaking(false),
+      onError: (message) => {
+        console.error(message);
+      },
+      onEvent: async (event) => {
+        const userText = extractRealtimeUserText(event);
+        if (userText && sessionId) {
+          lastUserTextRef.current = userText;
+          setHasUserStarted(true);
+
+          const userNo = await getNextTurnNo();
+          const { data: uTurn, error: uErr } = await supabase
+            .from("roleplay_turns")
+            .insert({
+              session_id: sessionId,
+              turn_no: userNo,
+              role: "user",
+              text_raw: userText,
+            })
+            .select("turn_id,created_at")
+            .single();
+
+          if (!uErr && uTurn) {
+            setMessages((prev) => [
+              ...prev,
+              {
+                id: uTurn.turn_id,
+                role: "user",
+                text: userText,
+                createdAt: new Date(uTurn.created_at).getTime(),
+              },
+            ]);
+          }
+
+          const nextUserCount = (session?.turn_count_user ?? 0) + 1;
+          await supabase.from("roleplay_sessions").update({ turn_count_user: nextUserCount }).eq("session_id", sessionId);
+          setSession((prev) => (prev ? { ...prev, turn_count_user: nextUserCount } : prev));
+        }
+
+        const aiText = extractRealtimeAssistantText(event);
+        if (aiText && sessionId) {
+          const aiNo = await getNextTurnNo();
+          const { data: aTurn, error: aErr } = await supabase
+            .from("roleplay_turns")
+            .insert({
+              session_id: sessionId,
+              turn_no: aiNo,
+              role: "ai",
+              text_raw: aiText,
+            })
+            .select("turn_id,created_at")
+            .single();
+
+          if (!aErr && aTurn) {
+            setMessages((prev) => [
+              ...prev,
+              {
+                id: aTurn.turn_id,
+                role: "ai",
+                text: aiText,
+                createdAt: new Date(aTurn.created_at).getTime(),
+              },
+            ]);
+          }
+
+          const nextAiCount = (session?.turn_count_ai ?? 0) + 1;
+          await supabase.from("roleplay_sessions").update({ turn_count_ai: nextAiCount }).eq("session_id", sessionId);
+          setSession((prev) => (prev ? { ...prev, turn_count_ai: nextAiCount } : prev));
+
+          if (isB && goals.length > 0 && lastUserTextRef.current) {
+            try {
+              const out = await checkGoalsWithEdge({
+                sessionId,
+                scenarioId: scenario.scenario_id,
+                userText: lastUserTextRef.current,
+                aiText,
+                goals,
+              });
+
+              const achieved = Array.isArray(out?.achieved_goal_ids) ? out.achieved_goal_ids : [];
+              if (achieved.length > 0) {
+                setCheckedGoalIds((prev) => {
+                  const next = { ...prev };
+                  achieved.forEach((id) => {
+                    next[id] = true;
+                  });
+                  return next;
+                });
+              }
+            } catch (e) {
+              console.error("goal_check failed", e);
+            }
+          }
+
+          if (!isB) {
+            const nextPairTurns = Math.min(
+              (session?.turn_count_user ?? 0) + 1,
+              (session?.turn_count_ai ?? 0) + 1
+            );
+            if (nextPairTurns >= turnLimit) {
+              void endSession("turn_limit");
+            }
+          }
+        }
+      },
     });
 
-    const text = await res.text();
-    let json: any = null;
-    try {
-      json = JSON.parse(text);
-    } catch {
-      json = { raw: text };
-    }
-
-    if (!res.ok) {
-      throw new Error(`chat_text ${res.status}: ${JSON.stringify(json)}`);
-    }
-
-    return json as {
-      ai_text: string;
-      correction: string | null;
-    };
-  }
-
-  async function generateTtsWithEdge(text: string) {
-    const { data: sess } = await supabase.auth.getSession();
-    const accessToken = sess.session?.access_token;
-
-    const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
-    const fnUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat_tts`;
-
-    const res = await fetch(fnUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        apikey: anonKey,
-        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-      },
-      body: JSON.stringify({
-        sessionId,
-        text,
-        voice: "alloy",
-      }),
-    });
-
-    const raw = await res.text();
-    let json: any = null;
-    try {
-      json = JSON.parse(raw);
-    } catch {
-      json = { raw };
-    }
-
-    if (!res.ok) {
-      throw new Error(`chat_tts ${res.status}: ${JSON.stringify(json)}`);
-    }
-
-    return json as {
-      tts_audio_url: string | null;
-    };
+    await client.connect();
+    realtimeRef.current = client;
+    setConnecting(false);
   }
 
   useEffect(() => {
@@ -554,7 +476,7 @@ export default function PlayPage() {
 
       const { data: tData, error: tErr } = await supabase
         .from("roleplay_turns")
-        .select("turn_id,session_id,turn_no,role,text_raw,text_corrected,text_translated,audio_url,created_at")
+        .select("turn_id,session_id,turn_no,role,text_raw,text_corrected,created_at")
         .eq("session_id", sessionId)
         .order("turn_no", { ascending: true });
 
@@ -570,9 +492,6 @@ export default function PlayPage() {
         role: t.role === "assistant" || t.role === "ai" ? "ai" : "user",
         text: t.text_raw ?? "",
         correctedText: t.text_corrected,
-        translatedText: t.text_translated,
-        audioUrl: t.audio_url ?? null,
-        canAutoplay: t.audio_url ? true : false,
         createdAt: new Date(t.created_at).getTime(),
       }));
       setMessages(msgs);
@@ -618,336 +537,43 @@ export default function PlayPage() {
 
   async function startListening() {
     if (playState !== "idle") return;
-    if (isAiSpeaking || isAiVoicePending) return;
-
-    stopAnyAudio();
-
-    const Ctor = getSpeechRecognitionCtor();
-    if (!Ctor) {
-      setSpeechSupported(false);
-      alert("이 브라우저에서는 음성 인식이 안정적으로 지원되지 않아요. Safari에서 다시 시도해주세요.");
-      return;
-    }
-
-    setInterimText("");
-    finalTranscriptRef.current = "";
-    listeningStartedAtRef.current = Date.now();
-    startHandledRef.current = false;
-
-    const mobile = isMobileDevice();
-    const ios = isIOS();
-
-    const rec: SpeechRecognitionLike = new Ctor();
-    recognitionRef.current = rec;
-
-    rec.lang = "en-US";
-    rec.continuous = ios ? false : !mobile;
-    rec.interimResults = ios ? false : !mobile;
-    rec.maxAlternatives = 1;
-
-    rec.onstart = () => {
-      if (startHandledRef.current) return;
-      startHandledRef.current = true;
-      setPlayState("listening");
-      void unlockAudioOnce();
-    };
-
-    rec.onerror = (e) => {
-      console.error("stt error", e);
-      recognitionRef.current = null;
-      setPlayState("idle");
-      setInterimText("");
-      finalTranscriptRef.current = "";
-
-      const err = e?.error ?? "";
-      if (err === "not-allowed" || err === "service-not-allowed") {
-        alert("마이크 권한이 필요해요. 아이폰에서는 Safari에서 열고, 브라우저 설정에서 마이크를 허용해주세요.");
-        return;
-      }
-      if (err === "no-speech") {
-        alert("음성이 감지되지 않았어요. 조금 더 가까이에서 또박또박 말해보세요.");
-        return;
-      }
-      if (err === "audio-capture") {
-        alert("마이크를 사용할 수 없어요. 이어폰/블루투스 연결 상태나 브라우저 권한을 확인해주세요.");
-        return;
-      }
-
-      alert("음성 인식에 실패했어요. 다시 시도해줘.");
-    };
-
-    rec.onresult = (e) => {
-      let interim = "";
-
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        const res = e.results[i];
-        const transcript = (res[0]?.transcript ?? "").trim();
-        if (!transcript) continue;
-
-        if (res.isFinal) {
-          finalTranscriptRef.current += (finalTranscriptRef.current ? " " : "") + transcript;
-        } else {
-          interim += (interim ? " " : "") + transcript;
-        }
-      }
-
-      if (!mobile) {
-        const preview = [finalTranscriptRef.current, interim].filter(Boolean).join(" ");
-        setInterimText(preview.trim());
-      }
-    };
-
-    rec.onend = () => {
-      recognitionRef.current = null;
-
-      const finalText = (finalTranscriptRef.current || "").trim();
-
-      setInterimText("");
-      finalTranscriptRef.current = "";
-
-      setPlayState((prev) => (prev === "processing" ? prev : "idle"));
-
-      const tooShort = finalText.length < 2;
-      const tooFast = Date.now() - listeningStartedAtRef.current < 400;
-
-      if (!tooShort && !tooFast) {
-        void handleUserUtterance(finalText);
-      }
-    };
+    if (isAiSpeaking) return;
 
     try {
-      rec.start();
-    } catch (err) {
-      console.error(err);
-      recognitionRef.current = null;
-      alert("음성 인식을 시작할 수 없습니다.");
+      await ensureRealtimeConnected();
+      realtimeRef.current?.startMic();
+      setPlayState("listening");
+    } catch (e: any) {
+      console.error(e);
+      alert(`Realtime 연결 실패: ${e?.message ?? "unknown error"}`);
       setPlayState("idle");
     }
   }
 
   function stopListening() {
-    if (playState !== "listening") return;
-    try {
-      recognitionRef.current?.stop();
-    } catch {
-      recognitionRef.current = null;
-      setPlayState("idle");
-    }
-  }
-
-  async function handleUserUtterance(text: string) {
-    if (!sessionId || !session || !scenario) return;
-
-    if (!isB && pairTurnsNow >= turnLimit) {
-      await endSession("turn_limit");
-      return;
-    }
-
-    if (isB && goalsDone) {
-      await endSession("goals_done");
-      return;
-    }
-
+    realtimeRef.current?.stopMic();
     setPlayState("processing");
-    if (!hasUserStarted) setHasUserStarted(true);
-
-    const userNo = await getNextTurnNo();
-    const { data: uTurn, error: uErr } = await supabase
-      .from("roleplay_turns")
-      .insert({
-        session_id: sessionId,
-        turn_no: userNo,
-        role: "user",
-        text_raw: text,
-      })
-      .select("turn_id,created_at")
-      .single();
-
-    if (uErr) {
-      alert(`유저 턴 저장 실패: ${uErr.message}`);
-      setPlayState("idle");
-      return;
-    }
-
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: uTurn.turn_id,
-        role: "user",
-        text,
-        createdAt: new Date(uTurn.created_at).getTime(),
-      },
-    ]);
-
-    const nextUserCount = (session.turn_count_user ?? 0) + 1;
-    await supabase.from("roleplay_sessions").update({ turn_count_user: nextUserCount }).eq("session_id", sessionId);
-    setSession((prev) => (prev ? { ...prev, turn_count_user: nextUserCount } : prev));
-
-    let aiText = "Sorry, could you say that again?";
-    let correction: string | null = null;
-
-    try {
-      const res = await generateAiTextWithEdge(text);
-      aiText = res.ai_text || aiText;
-      correction = res.correction ?? null;
-    } catch (e: any) {
-      console.error(e);
-      alert(`AI 호출 실패: ${e?.message ?? "unknown error"}`);
-    }
-
-    if ((settings?.correction_mode ?? "suggest") === "correct" && correction) {
-      await supabase.from("roleplay_turns").update({ text_corrected: correction }).eq("turn_id", uTurn.turn_id);
-      setMessages((prev) =>
-        prev.map((m) => (m.id === uTurn.turn_id ? { ...m, correctedText: correction } : m))
-      );
-    }
-
-    const aiNo = await getNextTurnNo();
-    const { data: aTurn, error: aErr } = await supabase
-      .from("roleplay_turns")
-      .insert({
-        session_id: sessionId,
-        turn_no: aiNo,
-        role: "ai",
-        text_raw: aiText,
-        audio_url: null,
-      })
-      .select("turn_id,created_at")
-      .single();
-
-    if (aErr) {
-      alert(`AI 턴 저장 실패: ${aErr.message}`);
-      setPlayState("idle");
-      return;
-    }
-
-    const newAiMsg: Msg = {
-      id: aTurn.turn_id,
-      role: "ai",
-      text: aiText,
-      createdAt: new Date(aTurn.created_at).getTime(),
-      audioUrl: null,
-      canAutoplay: false,
-    };
-    setMessages((prev) => [...prev, newAiMsg]);
-
-    const nextAiCount = (session.turn_count_ai ?? 0) + 1;
-    await supabase.from("roleplay_sessions").update({ turn_count_ai: nextAiCount }).eq("session_id", sessionId);
-    setSession((prev) => (prev ? { ...prev, turn_count_ai: nextAiCount } : prev));
-
-    if (isB && goals.length > 0) {
-      try {
-        const out = await checkGoalsWithEdge({
-          sessionId,
-          scenarioId: scenario.scenario_id,
-          userText: text,
-          aiText,
-          goals,
-        });
-
-        const achieved = Array.isArray(out?.achieved_goal_ids) ? out.achieved_goal_ids : [];
-        if (achieved.length > 0) {
-          setCheckedGoalIds((prev) => {
-            const next = { ...prev };
-            achieved.forEach((id) => {
-              next[id] = true;
-            });
-            return next;
-          });
-        }
-      } catch (e) {
-        console.error("goal_check failed", e);
-      }
-    }
-
-    // ✅ 텍스트는 먼저 보여주고, 음성은 뒤에서 생성
-    setPlayState("idle");
-    setIsAiVoicePending(true);
-
-    let ttsUrl: string | null = null;
-    try {
-      const tts = await generateTtsWithEdge(aiText);
-      ttsUrl = tts.tts_audio_url ?? null;
-    } catch (e) {
-      console.error("tts failed", e);
-    }
-
-    if (ttsUrl) {
-      await supabase.from("roleplay_turns").update({ audio_url: ttsUrl }).eq("turn_id", aTurn.turn_id);
-
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === newAiMsg.id
-            ? {
-                ...m,
-                audioUrl: ttsUrl,
-              }
-            : m
-        )
-      );
-
-      const ok = await tryAutoplay(ttsUrl);
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === newAiMsg.id
-            ? {
-                ...m,
-                audioUrl: ttsUrl,
-                canAutoplay: ok,
-              }
-            : m
-        )
-      );
-    }
-
-    setIsAiVoicePending(false);
-
-    if (!isB) {
-      const nextPairTurns = Math.min(nextUserCount, nextAiCount);
-      if (nextPairTurns >= turnLimit) {
-        await endSession("turn_limit");
-      }
-    }
   }
 
   const micLabel = useMemo(() => {
-    const mobile = isMobileDevice();
-
-    if (!speechSupported) {
-      return isIOS()
-        ? "이 기기에서는 음성 인식이 불안정할 수 있어요. Safari에서 다시 시도해주세요."
-        : "이 브라우저에서는 음성 인식을 지원하지 않아요.";
-    }
-
-    if (isAiVoicePending) {
-      return "AI 음성을 준비 중이에요.";
-    }
-
-    if (isAiSpeaking) {
-      return "AI가 말하고 있어요. 끝난 뒤에 다시 말해주세요.";
-    }
+    if (connecting) return "연결 중…";
+    if (isAiSpeaking) return "AI가 말하고 있어요. 끝난 뒤에 다시 말해주세요.";
 
     if (isB) {
       if (playState === "idle") {
-        return mobile ? "버튼을 누르고 한 문장씩 말해주세요" : "버튼을 누르고 대화를 시작해주세요";
+        return "버튼을 누르고 말해주세요";
       }
       if (playState === "listening") {
-        return mobile ? "듣고 있어요. 말이 끝나면 자동으로 전송돼요." : "듣고 있어요. 말이 끝나면 다시 버튼을 눌러주세요.";
+        return isIOS() ? "말이 끝나면 버튼을 다시 눌러주세요." : "듣고 있어요. 말이 끝나면 버튼을 다시 눌러주세요.";
       }
       return "응답을 기다리고 있어요";
     }
 
-    if (!hasUserStarted) {
-      return mobile ? "버튼을 누르고 한 문장씩 말해주세요" : "버튼을 누르고 대화를 시작해주세요";
-    }
-    if (playState === "idle") {
-      return mobile ? "버튼을 누르고 한 문장씩 말해주세요" : "말을 시작할 때 버튼을 눌러주세요";
-    }
-    if (playState === "listening") {
-      return mobile ? "듣고 있어요. 말이 끝나면 자동으로 전송돼요." : "듣고 있어요. 말이 끝나면 다시 버튼을 눌러주세요.";
-    }
-    return "처리 중…";
-  }, [isB, hasUserStarted, playState, speechSupported, isAiSpeaking, isAiVoicePending]);
+    if (!hasUserStarted) return "버튼을 누르고 대화를 시작해주세요";
+    if (playState === "idle") return "말을 시작할 때 버튼을 눌러주세요";
+    if (playState === "listening") return "듣고 있어요. 말이 끝나면 버튼을 다시 눌러주세요.";
+    return "응답을 기다리고 있어요";
+  }, [connecting, isAiSpeaking, isB, playState, hasUserStarted]);
 
   if (loading) return <div className={styles.loading}>불러오는 중…</div>;
 
@@ -967,7 +593,7 @@ export default function PlayPage() {
       <div className={styles.topArea}>
         <div className={styles.header}>
           <div className={styles.headerTitle}>{scenario?.title ?? "시나리오 명"}</div>
-          <button className={styles.closeBtn} onClick={() => endSession("user_exit")} aria-label="close">
+          <button className={styles.closeBtn} onClick={() => void endSession("user_exit")} aria-label="close">
             ✕
           </button>
         </div>
@@ -1025,12 +651,6 @@ export default function PlayPage() {
               <div className={isAiMsg ? styles.aiBubble : styles.userBubble}>
                 <div className={styles.bubbleText}>{m.text}</div>
 
-                {isAiMsg && m.audioUrl && m.canAutoplay === false && (
-                  <div className={styles.subRow}>
-                    <span className={styles.autoPlayHint}>자동재생이 막혔어요</span>
-                  </div>
-                )}
-
                 {!isAiMsg && (settings?.correction_mode ?? "suggest") === "correct" && (
                   <>
                     {!m.correctedText ? (
@@ -1048,16 +668,6 @@ export default function PlayPage() {
           );
         })}
 
-        {playState === "listening" && interimText.trim() && (
-          <div className={styles.userWrap}>
-            <div className={styles.userBubble}>
-              <div className={styles.bubbleText} style={{ opacity: 0.7 }}>
-                {interimText}
-              </div>
-            </div>
-          </div>
-        )}
-
         <div ref={bottomRef} />
       </div>
 
@@ -1066,15 +676,8 @@ export default function PlayPage() {
 
         <button
           className={styles.micBtn}
-          onClick={playState === "listening" ? stopListening : startListening}
-          disabled={
-            !speechSupported ||
-            isAiSpeaking ||
-            isAiVoicePending ||
-            playState === "processing" ||
-            (!isB && pairTurnsNow >= turnLimit) ||
-            (isB && goalsDone)
-          }
+          onClick={playState === "listening" ? stopListening : () => void startListening()}
+          disabled={connecting || isAiSpeaking || (!isB && pairTurnsNow >= turnLimit) || (isB && goalsDone)}
           aria-label="mic"
         >
           <img
