@@ -170,6 +170,7 @@ export default function PlayPage() {
   const currentAudioRef = useRef<HTMLAudioElement | null>(null);
   const endTimerRef = useRef<number | null>(null);
   const endingRef = useRef(false);
+  const startHandledRef = useRef(false);
 
   const turnLimit = useMemo(() => session?.turn_limit ?? 20, [session?.turn_limit]);
 
@@ -570,8 +571,6 @@ export default function PlayPage() {
   async function startListening() {
     if (playState !== "idle") return;
 
-    await unlockAudioOnce();
-
     const Ctor = getSpeechRecognitionCtor();
     if (!Ctor) {
       setSpeechSupported(false);
@@ -582,20 +581,26 @@ export default function PlayPage() {
     setInterimText("");
     finalTranscriptRef.current = "";
     listeningStartedAtRef.current = Date.now();
+    startHandledRef.current = false;
 
     const mobile = isMobileDevice();
-    const ios = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+    const ios = isIOS();
 
     const rec: SpeechRecognitionLike = new Ctor();
     recognitionRef.current = rec;
 
     rec.lang = "en-US";
-    rec.continuous = ios ? false: !mobile;;
-    rec.interimResults = ios ? false: !mobile;
+    rec.continuous = ios ? false : !mobile;
+    rec.interimResults = ios ? false : !mobile;
     rec.maxAlternatives = 1;
 
     rec.onstart = () => {
+      if (startHandledRef.current) return;
+      startHandledRef.current = true;
       setPlayState("listening");
+
+      // ✅ 권한 팝업을 먼저 띄우기 위해 start() 이후에 오디오 unlock
+      void unlockAudioOnce();
     };
 
     rec.onerror = (e) => {
@@ -605,8 +610,8 @@ export default function PlayPage() {
       finalTranscriptRef.current = "";
 
       const err = e?.error ?? "";
-      if (err === "not-allowed") {
-        alert("마이크 권한이 필요해요. 브라우저 설정에서 마이크를 허용해주세요.");
+      if (err === "not-allowed" || err === "service-not-allowed") {
+        alert("마이크 권한이 필요해요. 아이폰에서는 Safari에서 열고, 브라우저 설정에서 마이크를 허용해주세요.");
         return;
       }
       if (err === "no-speech") {
@@ -650,11 +655,12 @@ export default function PlayPage() {
       const tooFast = Date.now() - listeningStartedAtRef.current < 400;
 
       if (!tooShort && !tooFast) {
-        handleUserUtterance(finalText);
+        void handleUserUtterance(finalText);
       }
     };
 
     try {
+      // ✅ 사용자 클릭 직후 가장 먼저 start()
       rec.start();
     } catch (err) {
       console.error(err);
@@ -819,7 +825,7 @@ export default function PlayPage() {
 
     if (!speechSupported) {
       return isIOS()
-        ? "이 기기에서는 음성 인식이 불안정할 수 있어요. Safari 또는 Chrome에서 다시 시도해주세요."
+        ? "이 기기에서는 음성 인식이 불안정할 수 있어요. Safari에서 다시 시도해주세요."
         : "이 브라우저에서는 음성 인식을 지원하지 않아요.";
     }
 
