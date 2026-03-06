@@ -104,6 +104,20 @@ function getSpeechRecognitionCtor(): any {
   return w.SpeechRecognition || w.webkitSpeechRecognition || null;
 }
 
+function isMobileDevice() {
+  const ua = navigator.userAgent || "";
+  return /Android|iPhone|iPad|iPod/i.test(ua);
+}
+
+function isIOS() {
+  const ua = navigator.userAgent || "";
+  return /iPhone|iPad|iPod/i.test(ua);
+}
+
+function supportsSpeechRecognition() {
+  return !!getSpeechRecognitionCtor();
+}
+
 function pad2(n: number) {
   return String(n).padStart(2, "0");
 }
@@ -147,12 +161,14 @@ export default function PlayPage() {
   const listeningStartedAtRef = useRef<number>(0);
   const [interimText, setInterimText] = useState<string>("");
 
+  const [speechSupported, setSpeechSupported] = useState(true);
+
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
   const audioUnlockedRef = useRef(false);
   const currentAudioRef = useRef<HTMLAudioElement | null>(null);
-    const endTimerRef = useRef<number | null>(null);
+  const endTimerRef = useRef<number | null>(null);
   const endingRef = useRef(false);
 
   const turnLimit = useMemo(() => session?.turn_limit ?? 20, [session?.turn_limit]);
@@ -181,6 +197,10 @@ export default function PlayPage() {
   );
 
   useEffect(() => {
+    setSpeechSupported(supportsSpeechRecognition());
+  }, []);
+
+  useEffect(() => {
     const t = setInterval(() => {
       if (session?.status === "active") setElapsedSec((v) => v + 1);
     }, 1000);
@@ -194,50 +214,45 @@ export default function PlayPage() {
   }, [messages.length, interimText]);
 
   useEffect(() => {
-  return () => {
-    try {
-      recognitionRef.current?.stop();
-    } catch {}
-    try {
-      currentAudioRef.current?.pause();
-      currentAudioRef.current = null;
-    } catch {}
-    if (endTimerRef.current) window.clearTimeout(endTimerRef.current);
-  };
-}, []);
-
-function wait(ms: number) {
-  return new Promise<void>((resolve) => {
-    endTimerRef.current = window.setTimeout(() => resolve(), ms);
-  });
-}
-
-/** ✅ 현재 재생 중인 오디오가 있으면 끝날 때까지 기다림 (최대 maxMs) */
-async function waitForAudioEnd(maxMs = 15000) {
-  const a = currentAudioRef.current;
-  if (!a) return;
-
-  // 이미 끝났으면 패스
-  if (a.paused || a.ended) return;
-
-  await new Promise<void>((resolve) => {
-    let done = false;
-
-    const finish = () => {
-      if (done) return;
-      done = true;
-      a.removeEventListener("ended", finish);
-      a.removeEventListener("pause", finish);
-      resolve();
+    return () => {
+      try {
+        recognitionRef.current?.stop();
+      } catch {}
+      try {
+        currentAudioRef.current?.pause();
+        currentAudioRef.current = null;
+      } catch {}
+      if (endTimerRef.current) window.clearTimeout(endTimerRef.current);
     };
+  }, []);
 
-    a.addEventListener("ended", finish, { once: true });
-    a.addEventListener("pause", finish, { once: true });
+  function wait(ms: number) {
+    return new Promise<void>((resolve) => {
+      endTimerRef.current = window.setTimeout(() => resolve(), ms);
+    });
+  }
 
-    // 혹시 이벤트가 안 오는 케이스 방지 (네트워크 문제 등)
-    window.setTimeout(() => finish(), maxMs);
-  });
-}
+  async function waitForAudioEnd(maxMs = 15000) {
+    const a = currentAudioRef.current;
+    if (!a) return;
+    if (a.paused || a.ended) return;
+
+    await new Promise<void>((resolve) => {
+      let done = false;
+
+      const finish = () => {
+        if (done) return;
+        done = true;
+        a.removeEventListener("ended", finish);
+        a.removeEventListener("pause", finish);
+        resolve();
+      };
+
+      a.addEventListener("ended", finish, { once: true });
+      a.addEventListener("pause", finish, { once: true });
+      window.setTimeout(() => finish(), maxMs);
+    });
+  }
 
   async function getNextTurnNo(): Promise<number> {
     if (!sessionId) return 1;
@@ -294,41 +309,37 @@ async function waitForAudioEnd(maxMs = 15000) {
   }
 
   async function endSession(reason: "user_exit" | "turn_limit" | "goals_done") {
-  if (!sessionId) return;
-  if (endingRef.current) return;
-  endingRef.current = true;
+    if (!sessionId) return;
+    if (endingRef.current) return;
+    endingRef.current = true;
 
-  // ✅ 유저가 종료 버튼을 누른 경우는 즉시 끊어도 되게(원하면)
-  const isUserExit = reason === "user_exit";
+    const isUserExit = reason === "user_exit";
 
-  try {
-    // STT만 멈추고
     try {
-      recognitionRef.current?.stop();
-    } catch {}
+      try {
+        recognitionRef.current?.stop();
+      } catch {}
 
-    // ✅ 자동 종료(턴리밋/목표달성)면 오디오 끝까지 + 3초 기다리기
-    if (!isUserExit) {
-      await waitForAudioEnd(15000);
-      await wait(3000);
-    } else {
-      // user_exit이면 바로 넘어가고 싶으면 딜레이 없음
-      // await wait(0);
-      stopAnyAudio(); // user_exit만 끊어도 OK
+      if (!isUserExit) {
+        await waitForAudioEnd(15000);
+        await wait(3000);
+      } else {
+        stopAnyAudio();
+      }
+
+      await supabase
+        .from("roleplay_sessions")
+        .update({ status: "ended", ended_at: new Date().toISOString(), end_reason: reason })
+        .eq("session_id", sessionId);
+
+      setSession((prev) =>
+        prev ? { ...prev, status: "ended", ended_at: new Date().toISOString(), end_reason: reason } : prev
+      );
+    } finally {
+      navigate(`/${variant}/result/${sessionId}`);
     }
-
-    await supabase
-      .from("roleplay_sessions")
-      .update({ status: "ended", ended_at: new Date().toISOString(), end_reason: reason })
-      .eq("session_id", sessionId);
-
-    setSession((prev) =>
-      prev ? { ...prev, status: "ended", ended_at: new Date().toISOString(), end_reason: reason } : prev
-    );
-  } finally {
-    navigate(`/${variant}/result/${sessionId}`);
   }
-}
+
   async function checkGoalsWithEdge(args: {
     sessionId: string;
     scenarioId: string;
@@ -547,15 +558,13 @@ async function waitForAudioEnd(maxMs = 15000) {
 
       setLoading(false);
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId]);
+  }, [sessionId, navigate, pathVariant]);
 
   useEffect(() => {
     if (!isB) return;
     if (!loading && goalsDone && session?.status === "active") {
       endSession("goals_done");
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isB, loading, goalsDone, session?.status]);
 
   async function startListening() {
@@ -565,7 +574,8 @@ async function waitForAudioEnd(maxMs = 15000) {
 
     const Ctor = getSpeechRecognitionCtor();
     if (!Ctor) {
-      alert("이 브라우저는 음성 인식(Web Speech API)을 지원하지 않습니다. (Chrome 권장)");
+      setSpeechSupported(false);
+      alert("이 브라우저에서는 음성 인식이 안정적으로 지원되지 않아요. Safari 또는 Chrome에서 다시 시도해주세요.");
       return;
     }
 
@@ -573,26 +583,42 @@ async function waitForAudioEnd(maxMs = 15000) {
     finalTranscriptRef.current = "";
     listeningStartedAtRef.current = Date.now();
 
+    const mobile = isMobileDevice();
+
     const rec: SpeechRecognitionLike = new Ctor();
     recognitionRef.current = rec;
 
     rec.lang = "en-US";
-    rec.continuous = true;
-    rec.interimResults = true;
+    rec.continuous = !mobile;
+    rec.interimResults = !mobile;
     rec.maxAlternatives = 1;
 
-    rec.onstart = () => setPlayState("listening");
+    rec.onstart = () => {
+      setPlayState("listening");
+    };
 
     rec.onerror = (e) => {
       console.error("stt error", e);
       setPlayState("idle");
       setInterimText("");
       finalTranscriptRef.current = "";
+
+      const err = e?.error ?? "";
+      if (err === "not-allowed") {
+        alert("마이크 권한이 필요해요. 브라우저 설정에서 마이크를 허용해주세요.");
+        return;
+      }
+      if (err === "no-speech") {
+        alert("음성이 감지되지 않았어요. 조금 더 가까이에서 또박또박 말해보세요.");
+        return;
+      }
+
       alert("음성 인식에 실패했어요. 다시 시도해줘.");
     };
 
     rec.onresult = (e) => {
       let interim = "";
+
       for (let i = e.resultIndex; i < e.results.length; i++) {
         const res = e.results[i];
         const transcript = (res[0]?.transcript ?? "").trim();
@@ -605,11 +631,27 @@ async function waitForAudioEnd(maxMs = 15000) {
         }
       }
 
-      const preview = [finalTranscriptRef.current, interim].filter(Boolean).join(" ");
-      setInterimText(preview.trim());
+      if (!mobile) {
+        const preview = [finalTranscriptRef.current, interim].filter(Boolean).join(" ");
+        setInterimText(preview.trim());
+      }
     };
 
-    rec.onend = () => setPlayState((prev) => (prev === "processing" ? prev : "idle"));
+    rec.onend = () => {
+      const finalText = (finalTranscriptRef.current || "").trim();
+
+      setInterimText("");
+      finalTranscriptRef.current = "";
+
+      setPlayState((prev) => (prev === "processing" ? prev : "idle"));
+
+      const tooShort = finalText.length < 2;
+      const tooFast = Date.now() - listeningStartedAtRef.current < 400;
+
+      if (!tooShort && !tooFast) {
+        handleUserUtterance(finalText);
+      }
+    };
 
     try {
       rec.start();
@@ -622,23 +664,9 @@ async function waitForAudioEnd(maxMs = 15000) {
 
   function stopListening() {
     if (playState !== "listening") return;
-
     try {
       recognitionRef.current?.stop();
     } catch {}
-
-    const finalText = (finalTranscriptRef.current || "").trim();
-    setInterimText("");
-
-    const tooShort = finalText.length < 2;
-    const tooFast = Date.now() - listeningStartedAtRef.current < 400;
-
-    setPlayState("idle");
-    finalTranscriptRef.current = "";
-
-    if (!tooShort && !tooFast) {
-      handleUserUtterance(finalText);
-    }
   }
 
   async function handleUserUtterance(text: string) {
@@ -758,8 +786,6 @@ async function waitForAudioEnd(maxMs = 15000) {
           goals,
         });
 
-        console.log("goal_check out", out);
-
         const achieved = Array.isArray(out?.achieved_goal_ids) ? out.achieved_goal_ids : [];
         if (achieved.length > 0) {
           setCheckedGoalIds((prev) => {
@@ -788,17 +814,35 @@ async function waitForAudioEnd(maxMs = 15000) {
   }
 
   const micLabel = useMemo(() => {
+    const mobile = isMobileDevice();
+
+    if (!speechSupported) {
+      return isIOS()
+        ? "이 기기에서는 음성 인식이 불안정할 수 있어요. Safari 또는 Chrome에서 다시 시도해주세요."
+        : "이 브라우저에서는 음성 인식을 지원하지 않아요.";
+    }
+
     if (isB) {
-      if (playState === "idle") return "버튼을 누르고 대화를 시작해주세요";
-      if (playState === "listening") return "듣고 있어요. 말이 끝나면 다시 버튼을 눌러주세요.";
+      if (playState === "idle") {
+        return mobile ? "버튼을 누르고 한 문장씩 말해주세요" : "버튼을 누르고 대화를 시작해주세요";
+      }
+      if (playState === "listening") {
+        return mobile ? "듣고 있어요. 말이 끝나면 자동으로 전송돼요." : "듣고 있어요. 말이 끝나면 다시 버튼을 눌러주세요.";
+      }
       return "응답을 기다리고 있어요";
     }
 
-    if (!hasUserStarted) return "버튼을 누르고 대화를 시작해주세요";
-    if (playState === "idle") return "말을 시작할 때 버튼을 눌러주세요";
-    if (playState === "listening") return "듣고 있어요. 말이 끝나면 다시 버튼을 눌러주세요.";
+    if (!hasUserStarted) {
+      return mobile ? "버튼을 누르고 한 문장씩 말해주세요" : "버튼을 누르고 대화를 시작해주세요";
+    }
+    if (playState === "idle") {
+      return mobile ? "버튼을 누르고 한 문장씩 말해주세요" : "말을 시작할 때 버튼을 눌러주세요";
+    }
+    if (playState === "listening") {
+      return mobile ? "듣고 있어요. 말이 끝나면 자동으로 전송돼요." : "듣고 있어요. 말이 끝나면 다시 버튼을 눌러주세요.";
+    }
     return "처리 중…";
-  }, [isB, hasUserStarted, playState]);
+  }, [isB, hasUserStarted, playState, speechSupported]);
 
   if (loading) return <div className={styles.loading}>불러오는 중…</div>;
 
@@ -918,7 +962,12 @@ async function waitForAudioEnd(maxMs = 15000) {
         <button
           className={styles.micBtn}
           onClick={playState === "listening" ? stopListening : startListening}
-          disabled={playState === "processing" || (!isB && pairTurnsNow >= turnLimit) || (isB && goalsDone)}
+          disabled={
+            !speechSupported ||
+            playState === "processing" ||
+            (!isB && pairTurnsNow >= turnLimit) ||
+            (isB && goalsDone)
+          }
           aria-label="mic"
         >
           <img
