@@ -15,16 +15,6 @@ function json(data: unknown, status = 200) {
   });
 }
 
-type ReqBody = {
-  scenarioTitle?: string;
-  scenarioDesc?: string;
-  npcRoleName?: string;
-  npcRoleDesc?: string;
-  difficulty?: "basic" | "intermediate";
-  correctionMode?: "correct" | "suggest";
-  voice?: string;
-};
-
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { status: 200, headers: CORS_HEADERS });
@@ -43,61 +33,11 @@ serve(async (req) => {
     return json({ error: "Missing OPENAI_API_KEY" }, 500);
   }
 
-  let body: ReqBody = {};
-  try {
-    body = await req.json();
-  } catch {
-    // allow empty body
-  }
-
-  const {
-    scenarioTitle = "Scenario",
-    scenarioDesc = "",
-    npcRoleName = "NPC",
-    npcRoleDesc = "",
-    difficulty = "basic",
-    correctionMode = "suggest",
-    voice = "marin",
-  } = body;
-
-  const instructions = [
-    `You are roleplaying as an NPC in an English conversation training app.`,
-    `Speak only in English.`,
-    `Keep each reply natural and short.`,
-    `Ask one question at a time.`,
-    `Stay in character.`,
-    `Scenario title: ${scenarioTitle}`,
-    scenarioDesc ? `Scenario situation: ${scenarioDesc}` : "",
-    `You are: ${npcRoleName}`,
-    npcRoleDesc ? `Role details: ${npcRoleDesc}` : "",
-    `Difficulty: ${difficulty}`,
-    `Correction mode: ${correctionMode}`,
-    `The user is speaking with voice. Reply with conversational spoken English, not long written paragraphs.`,
-  ]
-    .filter(Boolean)
-    .join("\n");
-
+  // ✅ 최소 payload만 보냄
   const payload = {
     session: {
       type: "realtime",
       model: "gpt-realtime",
-      output_modalities: ["audio", "text"],
-      instructions,
-      audio: {
-        input: {
-          transcription: {
-            model: "gpt-4o-transcribe",
-            language: "en",
-          },
-          turn_detection: {
-            type: "server_vad",
-            create_response: true,
-          },
-        },
-        output: {
-          voice,
-        },
-      },
     },
   };
 
@@ -112,6 +52,7 @@ serve(async (req) => {
 
   const text = await r.text();
   let data: any = null;
+
   try {
     data = JSON.parse(text);
   } catch {
@@ -119,10 +60,16 @@ serve(async (req) => {
   }
 
   if (!r.ok) {
-    return json({ error: "OpenAI realtime_session error", detail: data }, 400);
+    return json(
+      {
+        error: "OpenAI realtime_session error",
+        status: r.status,
+        detail: data,
+      },
+      400
+    );
   }
 
-  // docs example browser code expects data.value, but endpoint returns client_secret.value
   return json(
     {
       value: data?.client_secret?.value ?? null,

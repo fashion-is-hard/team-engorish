@@ -289,14 +289,24 @@ export default function PlayPage() {
 
     const client = new RealtimeVoiceClient({
       tokenEndpoint: `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/realtime_session`,
-      sessionPayload: {
-        scenarioTitle: scenario.title,
-        scenarioDesc: scenario.scenario_desc ?? "",
-        npcRoleName: npc?.role_name ?? "NPC",
-        npcRoleDesc: npc?.role_desc ?? "",
-        difficulty: settings?.difficulty ?? "basic",
-        correctionMode: settings?.correction_mode ?? "suggest",
+            sessionPayload: {
         voice: "marin",
+        instructions: [
+          "You are roleplaying as an NPC in an English conversation training app.",
+          "Speak only in English.",
+          "Keep each reply natural and short.",
+          "Ask one question at a time.",
+          "Stay in character.",
+          `Scenario title: ${scenario.title}`,
+          scenario.scenario_desc ? `Scenario situation: ${scenario.scenario_desc}` : "",
+          `You are: ${npc?.role_name ?? "NPC"}`,
+          npc?.role_desc ? `Role details: ${npc.role_desc}` : "",
+          `Difficulty: ${settings?.difficulty ?? "basic"}`,
+          `Correction mode: ${settings?.correction_mode ?? "suggest"}`,
+          "The user is speaking with voice. Reply with conversational spoken English.",
+        ]
+          .filter(Boolean)
+          .join("\n"),
       },
       onRemoteAudioStart: () => setIsAiSpeaking(true),
       onRemoteAudioStop: () => setIsAiSpeaking(false),

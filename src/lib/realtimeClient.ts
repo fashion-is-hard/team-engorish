@@ -125,6 +125,33 @@ export class RealtimeVoiceClient {
       sdp: answerSdp,
     });
 
+         // ✅ 세션 상세 설정은 연결 후 session.update 로 보냄
+    const sessionUpdateEvent = {
+      type: "session.update",
+      session: {
+        type: "realtime",
+        model: "gpt-realtime",
+        output_modalities: ["audio", "text"],
+        instructions:
+          typeof this.opts.sessionPayload?.instructions === "string"
+            ? this.opts.sessionPayload.instructions
+            : "You are a helpful voice conversation partner.",
+        audio: {
+          input: {
+            turn_detection: {
+              type: "server_vad",
+              create_response: true,
+            },
+          },
+          output: {
+            voice: this.opts.sessionPayload?.voice ?? "marin",
+          },
+        },
+      },
+    };
+
+    this.sendEvent(sessionUpdateEvent);
+
     this.connected = true;
   }
 
