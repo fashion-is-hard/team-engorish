@@ -1,4 +1,5 @@
 // src/lib/realtimeClient.ts
+console.log("REALTIME CLIENT VERSION 2");
 
 export type RealtimeServerEvent = {
   type: string;
@@ -77,10 +78,7 @@ export class RealtimeVoiceClient {
       tokenJson = { raw };
     }
 
-    const ephemeralKey =
-      tokenJson?.value ??
-      tokenJson?.client_secret?.value ??
-      null;
+    const ephemeralKey = tokenJson?.value ?? tokenJson?.client_secret?.value ?? null;
 
     if (!ephemeralKey) {
       const detail =
@@ -90,6 +88,8 @@ export class RealtimeVoiceClient {
         "Failed to get realtime token";
       throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
     }
+
+    console.log("Realtime token acquired");
 
     const pc = new RTCPeerConnection();
     this.pc = pc;
@@ -102,13 +102,26 @@ export class RealtimeVoiceClient {
     this.remoteAudioEl = audioEl;
 
     pc.ontrack = (e) => {
+      console.log("pc.ontrack");
       audioEl.srcObject = e.streams[0];
     };
 
-    audioEl.onplaying = () => this.opts.onRemoteAudioStart?.();
-    audioEl.onpause = () => this.opts.onRemoteAudioStop?.();
-    audioEl.onended = () => this.opts.onRemoteAudioStop?.();
-    audioEl.onerror = () => this.opts.onRemoteAudioStop?.();
+    audioEl.onplaying = () => {
+      console.log("remote audio playing");
+      this.opts.onRemoteAudioStart?.();
+    };
+    audioEl.onpause = () => {
+      console.log("remote audio paused");
+      this.opts.onRemoteAudioStop?.();
+    };
+    audioEl.onended = () => {
+      console.log("remote audio ended");
+      this.opts.onRemoteAudioStop?.();
+    };
+    audioEl.onerror = () => {
+      console.log("remote audio error");
+      this.opts.onRemoteAudioStop?.();
+    };
 
     pc.onconnectionstatechange = () => {
       console.log("pc.connectionState:", pc.connectionState);
@@ -208,17 +221,20 @@ export class RealtimeVoiceClient {
     });
 
     this.connected = true;
+    console.log("Realtime connected");
   }
 
   startMic() {
     if (this.micTrack) {
       this.micTrack.enabled = true;
+      console.log("mic enabled");
     }
   }
 
   stopMic() {
     if (this.micTrack) {
       this.micTrack.enabled = false;
+      console.log("mic disabled");
     }
   }
 
@@ -281,9 +297,7 @@ export function extractRealtimeAssistantText(event: RealtimeServerEvent): string
         }
       }
 
-      if (parts.length > 0) {
-        return parts.join(" ").trim();
-      }
+      if (parts.length > 0) return parts.join(" ").trim();
     }
   }
 
