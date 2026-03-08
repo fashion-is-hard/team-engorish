@@ -87,7 +87,12 @@ export class RealtimeVoiceClient {
       tokenJson = { raw };
     }
 
-    const ephemeralKey = tokenJson?.value ?? tokenJson?.client_secret?.value ?? null;
+    const ephemeralKey =
+      tokenJson?.value ??
+      tokenJson?.client_secret?.value ??
+      null;
+
+    console.log("ephemeralKey exists:", !!ephemeralKey);
 
     if (!ephemeralKey) {
       const detail =
