@@ -167,7 +167,7 @@ export class RealtimeVoiceClient {
 
     this.localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
     this.micTrack = this.localStream.getAudioTracks()[0];
-    this.micTrack.enabled = false;
+    //this.micTrack.enabled = false;
 
     // iOS Safari에서는 addTrack만으로는 offer의 방향 협상이 안 될 수 있어서
     // addTransceiver로 명시적으로 sendrecv 방향을 지정합니다
@@ -258,14 +258,14 @@ export class RealtimeVoiceClient {
 
   startMic() {
     if (this.micTrack) {
-      this.micTrack.enabled = true;
+      //this.micTrack.enabled = true;
       console.log("mic enabled");
     }
   }
 
   stopMic() {
     if (this.micTrack) {
-      this.micTrack.enabled = false;
+      //this.micTrack.enabled = false;
       console.log("mic disabled");
     }
   }
