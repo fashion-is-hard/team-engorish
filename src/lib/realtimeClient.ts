@@ -147,7 +147,7 @@ export class RealtimeVoiceClient {
 
     this.localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
     this.micTrack = this.localStream.getAudioTracks()[0];
-    this.micTrack.enabled = false;
+    //this.micTrack.enabled = false;
 
     pc.addTrack(this.micTrack, this.localStream);
 
@@ -165,10 +165,7 @@ export class RealtimeVoiceClient {
               : "You are a helpful voice conversation partner.",
           audio: {
             input: {
-              turn_detection: {
-                type: "server_vad",
-                create_response: true,
-              },
+              turn_detection: {type: "server_vad"},
             },
             output: {
               voice: this.opts.sessionPayload?.voice ?? "alloy",
@@ -231,14 +228,14 @@ export class RealtimeVoiceClient {
 
   startMic() {
     if (this.micTrack) {
-      this.micTrack.enabled = true;
+      //this.micTrack.enabled = true;
       console.log("mic enabled");
     }
   }
 
   stopMic() {
     if (this.micTrack) {
-      this.micTrack.enabled = false;
+      //this.micTrack.enabled = false;
       console.log("mic disabled");
     }
   }

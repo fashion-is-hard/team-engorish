@@ -643,9 +643,17 @@ export default function PlayPage() {
   }
 
   function stopListening() {
-    realtimeRef.current?.stopMic();
-    setPlayState("processing");
-  }
+  const client = realtimeRef.current;
+  if (!client) return;
+
+  client.stopMic();
+
+  client.sendEvent({
+    type: "response.create",
+  });
+
+  setPlayState("processing");
+}
 
   const micLabel = useMemo(() => {
     if (connecting) return "연결 중…";
