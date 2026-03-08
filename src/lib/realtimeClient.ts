@@ -16,15 +16,24 @@ export type RealtimeClientOptions = {
   onRemoteAudioStop?: () => void;
 };
 
-function waitForIceGatheringComplete(pc: RTCPeerConnection) {
+function waitForIceGatheringComplete(pc: RTCPeerConnection, timeoutMs = 5000) {
+  // iOS Safari에서는 icegatheringstatechange 이벤트가 오지 않을 수 있어서
+  // 타임아웃을 두고 그냥 진행시킵니다
   return new Promise<void>((resolve) => {
     if (pc.iceGatheringState === "complete") {
       resolve();
       return;
     }
 
+    const timer = setTimeout(() => {
+      pc.removeEventListener("icegatheringstatechange", handler);
+      console.warn("[RealtimeVoiceClient] ICE gathering timeout, proceeding anyway");
+      resolve();
+    }, timeoutMs);
+
     const handler = () => {
       if (pc.iceGatheringState === "complete") {
+        clearTimeout(timer);
         pc.removeEventListener("icegatheringstatechange", handler);
         resolve();
       }
@@ -97,13 +106,24 @@ export class RealtimeVoiceClient {
     const audioEl = document.createElement("audio");
     audioEl.autoplay = true;
     (audioEl as any).playsInline = true;
+    (audioEl as any).muted = false;
     audioEl.style.display = "none";
     document.body.appendChild(audioEl);
     this.remoteAudioEl = audioEl;
 
+    // iOS Safari: 사용자 제스처(버튼 탭) 컨텍스트에서 미리 play()를 호출해
+    // 오디오 컨텍스트를 unlock. 에러는 무시 (srcObject 없으면 실패해도 괜찮음)
+    audioEl.play().catch(() => {});
+
     pc.ontrack = (e) => {
-      console.log("pc.ontrack");
-      audioEl.srcObject = e.streams[0];
+      console.log("pc.ontrack", e.streams);
+      if (e.streams && e.streams[0]) {
+        audioEl.srcObject = e.streams[0];
+        // iOS Safari: srcObject가 설정된 후에 play()를 명시 호출해야 재생됩니다
+        audioEl.play().catch((err) => {
+          console.warn("[RealtimeVoiceClient] audio.play() failed on track:", err);
+        });
+      }
     };
 
     audioEl.onplaying = () => {
@@ -144,7 +164,9 @@ export class RealtimeVoiceClient {
     this.micTrack = this.localStream.getAudioTracks()[0];
     this.micTrack.enabled = false;
 
-    pc.addTrack(this.micTrack, this.localStream);
+    // iOS Safari에서는 addTrack만으로는 offer의 방향 협상이 안 될 수 있어서
+    // addTransceiver로 명시적으로 sendrecv 방향을 지정합니다
+    pc.addTransceiver(this.micTrack, { direction: "sendrecv", streams: [this.localStream] });
 
     this.dc = pc.createDataChannel("oai-events");
 
