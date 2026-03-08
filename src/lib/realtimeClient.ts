@@ -16,15 +16,24 @@ export type RealtimeClientOptions = {
   onRemoteAudioStop?: () => void;
 };
 
-function waitForIceGatheringComplete(pc: RTCPeerConnection) {
+function waitForIceGatheringComplete(pc: RTCPeerConnection, timeoutMs = 5000) {
+  // iOS Safari에서는 icegatheringstatechange 이벤트가 오지 않을 수 있어서
+  // 타임아웃을 두고 그냥 진행시킵니다
   return new Promise<void>((resolve) => {
     if (pc.iceGatheringState === "complete") {
       resolve();
       return;
     }
 
+    const timer = setTimeout(() => {
+      pc.removeEventListener("icegatheringstatechange", handler);
+      console.warn("[RealtimeVoiceClient] ICE gathering timeout, proceeding anyway");
+      resolve();
+    }, timeoutMs);
+
     const handler = () => {
       if (pc.iceGatheringState === "complete") {
+        clearTimeout(timer);
         pc.removeEventListener("icegatheringstatechange", handler);
         resolve();
       }
@@ -102,13 +111,24 @@ export class RealtimeVoiceClient {
     const audioEl = document.createElement("audio");
     audioEl.autoplay = true;
     (audioEl as any).playsInline = true;
+    (audioEl as any).muted = false;
     audioEl.style.display = "none";
     document.body.appendChild(audioEl);
     this.remoteAudioEl = audioEl;
 
+    // iOS Safari: 사용자 제스처(버튼 탭) 컨텍스트에서 미리 play()를 호출해
+    // 오디오 컨텍스트를 unlock. 에러는 무시 (srcObject 없으면 실패해도 괜찮음)
+    audioEl.play().catch(() => {});
+
     pc.ontrack = (e) => {
-      console.log("pc.ontrack");
-      audioEl.srcObject = e.streams[0];
+      console.log("pc.ontrack", e.streams);
+      if (e.streams && e.streams[0]) {
+        audioEl.srcObject = e.streams[0];
+        // iOS Safari: srcObject가 설정된 후에 play()를 명시 호출해야 재생됩니다
+        audioEl.play().catch((err) => {
+          console.warn("[RealtimeVoiceClient] audio.play() failed on track:", err);
+        });
+      }
     };
 
     audioEl.onplaying = () => {
@@ -149,27 +169,37 @@ export class RealtimeVoiceClient {
     this.micTrack = this.localStream.getAudioTracks()[0];
     //this.micTrack.enabled = false;
 
-    pc.addTrack(this.micTrack, this.localStream);
+    // iOS Safari에서는 addTrack만으로는 offer의 방향 협상이 안 될 수 있어서
+    // addTransceiver로 명시적으로 sendrecv 방향을 지정합니다
+    pc.addTransceiver(this.micTrack, { direction: "sendrecv", streams: [this.localStream] });
 
     this.dc = pc.createDataChannel("oai-events");
 
     this.dc.addEventListener("open", () => {
       console.log("Realtime data channel open");
 
+      // ✅ OpenAI Realtime API 정식 session.update 포맷
+      // - audio 래퍼 없이 최상위 레벨에 voice, turn_detection, input_audio_transcription 지정
+      // - input_audio_transcription이 없으면 서버에서 transcription: null이 되어 사용자 음성인식이 안 됨
       const sessionUpdateEvent = {
         type: "session.update",
         session: {
           instructions:
             typeof this.opts.sessionPayload?.instructions === "string"
               ? this.opts.sessionPayload.instructions
-              : "You are a helpful voice conversation partner.",
-          audio: {
-            input: {
-              turn_detection: {type: "server_vad"},
-            },
-            output: {
-              voice: this.opts.sessionPayload?.voice ?? "alloy",
-            },
+              : "You are a helpful voice conversation partner. Speak only in English.",
+          voice: this.opts.sessionPayload?.voice ?? "alloy",
+          // 사용자 음성을 텍스트로 변환(transcription)하도록 명시적으로 활성화
+          input_audio_transcription: {
+            model: "whisper-1",
+          },
+          // 서버 VAD: 사용자가 말을 멈추면 자동으로 응답 생성
+          turn_detection: {
+            type: "server_vad",
+            threshold: 0.5,
+            prefix_padding_ms: 300,
+            silence_duration_ms: 500,
+            create_response: true,
           },
         },
       };

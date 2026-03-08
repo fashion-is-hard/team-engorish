@@ -439,6 +439,29 @@ export default function PlayPage() {
     const accessToken = authSess.session?.access_token;
     const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 
+    const origFetch = window.fetch;
+    window.fetch = async (input, init) => {
+      if (typeof input === "string" && input.includes("realtime_session")) {
+        const res = await origFetch(input, init);
+        if (!res.ok) return res;
+        const text = await res.text();
+        let json: any = null;
+        try {
+          json = JSON.parse(text);
+        } catch {
+          return new Response(text, { status: res.status, headers: res.headers });
+        }
+        
+        // Fix the token extraction bug: If the edge function failed to extract it into 'value', we find it in raw.
+        const token = json.value || json.raw?.value || json.raw?.client_secret?.value;
+        if (token) {
+          return new Response(JSON.stringify({ value: token }), { status: res.status, headers: res.headers });
+        }
+        return new Response(text, { status: res.status, headers: res.headers });
+      }
+      return origFetch(input, init);
+    };
+
     const client = new RealtimeVoiceClient({
       tokenEndpoint: `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/realtime_session`,
       tokenHeaders: {
@@ -448,8 +471,9 @@ export default function PlayPage() {
       sessionPayload: {
         voice: "marin",
         instructions: [
+          // ⚡ 최우선 언어 설정: OpenAI 기본 다국어 지시를 덮어쓰기 위해 맨 앞에 배치
+          "CRITICAL: You MUST respond ONLY in English at all times, regardless of what language the user speaks. Never switch to any other language.",
           "You are roleplaying as an NPC in an English conversation training app.",
-          "Speak only in English.",
           "Keep each reply natural and short.",
           "Ask one question at a time.",
           "Stay in character.",
@@ -467,7 +491,11 @@ export default function PlayPage() {
       onRemoteAudioStart: () => setIsAiSpeaking(true),
       onRemoteAudioStop: () => setIsAiSpeaking(false),
       onError: (message) => {
-        console.error(message);
+        console.error("[Realtime] 연결 중 오류:", message);
+        // 연결 중 발생한 오류를 사용자에게 즉시 알립니다
+        alert(`음성 연결 오류: ${message}`);
+        setPlayState("idle");
+        setConnecting(false);
       },
       onEvent: async (event) => {
         await handleRealtimeEvent(event);
@@ -477,7 +505,12 @@ export default function PlayPage() {
     try {
       await client.connect();
       realtimeRef.current = client;
+    } catch (e) {
+      // 연결 실패 시 생성된 WebRTC 연결, audio 요소 등을 모두 정리합니다
+      client.close();
+      throw e;
     } finally {
+      window.fetch = origFetch;
       setConnecting(false);
     }
   }
