@@ -173,23 +173,28 @@ export class RealtimeVoiceClient {
     this.dc.addEventListener("open", () => {
       console.log("Realtime data channel open");
 
+      // ✅ OpenAI Realtime API 정식 session.update 포맷
+      // - audio 래퍼 없이 최상위 레벨에 voice, turn_detection, input_audio_transcription 지정
+      // - input_audio_transcription이 없으면 서버에서 transcription: null이 되어 사용자 음성인식이 안 됨
       const sessionUpdateEvent = {
         type: "session.update",
         session: {
           instructions:
             typeof this.opts.sessionPayload?.instructions === "string"
               ? this.opts.sessionPayload.instructions
-              : "You are a helpful voice conversation partner.",
-          audio: {
-            input: {
-              turn_detection: {
-                type: "server_vad",
-                create_response: true,
-              },
-            },
-            output: {
-              voice: this.opts.sessionPayload?.voice ?? "alloy",
-            },
+              : "You are a helpful voice conversation partner. Speak only in English.",
+          voice: this.opts.sessionPayload?.voice ?? "alloy",
+          // 사용자 음성을 텍스트로 변환(transcription)하도록 명시적으로 활성화
+          input_audio_transcription: {
+            model: "whisper-1",
+          },
+          // 서버 VAD: 사용자가 말을 멈추면 자동으로 응답 생성
+          turn_detection: {
+            type: "server_vad",
+            threshold: 0.5,
+            prefix_padding_ms: 300,
+            silence_duration_ms: 500,
+            create_response: true,
           },
         },
       };
