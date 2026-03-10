@@ -938,16 +938,16 @@ export default function PlayPage() {
       <div className={styles.bottom}>
         <div className={styles.status}>
           {startModalOpen
-            ? "확인 버튼을 누르면 대화가 시작됩니다."
+            ? "확인 버튼을 누르면 대화가 시작됩니다"
             : status === "recording"
-            ? "듣고 있어요."
+            ? "듣고 있어요, 말이 끝나면 다시 버튼을 눌러주세요"
             : status === "thinking"
             ? "응답을 기다리고 있어요"
             : status === "ai-speaking"
             ? "AI가 말하고 있어요"
             : "말을 시작할 때 버튼을 눌러주세요"}
           {!speechSupported && status === "idle"
-            ? " (실시간 전사는 일부 브라우저에서만 지원)"
+            ? " (실시간 전사는 일부 브라우저에서만 지원됩니다)"
             : ""}
         </div>
 

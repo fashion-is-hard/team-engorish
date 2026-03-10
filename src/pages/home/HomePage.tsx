@@ -53,10 +53,9 @@ export default function HomePage() {
         <h1 className={styles.title}>Welcome to Engorish!</h1>
 
         <section className={styles.noticeCard}>
-          <div className={styles.noticeTitle}>📌 업데이트 사항(20260310 17:25)</div>
+          <div className={styles.noticeTitle}>📌 업데이트 사항 (20260311 01:55)</div>
           <ul className={styles.noticeList}>
-            <li>비밀번호 재설정 기능이 추가되었습니다</li>
-            <li>UI가 개편되었습니다</li>
+            <li>UI 오류가 수정되었습니다</li>
           </ul>
         </section>
 

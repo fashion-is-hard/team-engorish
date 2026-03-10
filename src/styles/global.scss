@@ -6,6 +6,7 @@
    - 각 페이지는 .page 클래스를 붙여 공통 폭/패딩 사용
 */
 
+
 /* =========================
    1) Design Tokens
 ========================= */
@@ -80,14 +81,8 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font-family:
-    "Pretendard",
-    "SUIT",
-    "Inter",
-    "Apple SD Gothic Neo",
-    "Noto Sans KR",
-    "Segoe UI",
-    sans-serif;
+  font-family: "AtoZ", system-ui, -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo",
+    "Noto Sans KR", sans-serif;
   font-size: var(--font-body);
   line-height: var(--lh-normal);
   -webkit-font-smoothing: antialiased;
@@ -99,7 +94,9 @@ input,
 button,
 textarea,
 select {
-  font: inherit;
+  font-family: "AtoZ", system-ui, -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo",
+    "Noto Sans KR", sans-serif;
+  font-size: inherit;
 }
 
 /* 링크/버튼 기본 */

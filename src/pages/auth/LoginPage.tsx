@@ -108,8 +108,8 @@ export default function LoginPage() {
 
   const emailError = useMemo(() => {
     if (!touched.email) return "";
-    if (!email.trim()) return "ID를 바르게 입력해주세요";
-    if (!/^\S+@\S+\.\S+$/.test(email.trim())) return "ID를 바르게 입력해주세요";
+    if (!email.trim()) return "이메일을 바르게 입력해주세요";
+    if (!/^\S+@\S+\.\S+$/.test(email.trim())) return "이메일을 바르게 입력해주세요";
     return "";
   }, [email, touched.email]);
 
