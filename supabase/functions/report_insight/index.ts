@@ -24,6 +24,12 @@ type SessionRow = {
   report_insight: any | null;
 };
 
+type ScenarioLite = {
+  scenario_id: string;
+  title: string | null;
+  scenario_desc: string | null;
+};
+
 type AudioEval = {
   durationSec: number;
   avgLogprob: number | null;
@@ -55,6 +61,18 @@ function wordCount(s: string) {
 function normalizeVariant(v: unknown): "a" | "b" {
   const s = String(v ?? "").trim().toLowerCase();
   return s === "b" ? "b" : "a";
+}
+
+function takeLast<T>(arr: T[], n: number) {
+  return arr.slice(Math.max(0, arr.length - n));
+}
+
+function safeJsonParse(text: string) {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
 }
 
 // ---------------------
@@ -137,7 +155,6 @@ function computeBaseScoresFromTurns(userTurns: string[], aiTurns: string[]) {
 function logprobToScore(avgLogprob: number | null) {
   if (avgLogprob == null || Number.isNaN(avgLogprob)) return 55;
 
-  // 0에 가까울수록 더 좋음, -1.2 이하면 낮게
   const hi = -0.15;
   const lo = -1.2;
 
@@ -151,7 +168,6 @@ function logprobToScore(avgLogprob: number | null) {
 function wpmToScore(wpm: number | null) {
   if (wpm == null || Number.isNaN(wpm) || !Number.isFinite(wpm)) return 60;
 
-  // 대략 90~170 사이를 가장 안정적으로 보고 점수화
   if (wpm >= 90 && wpm <= 170) return 90;
   if (wpm >= 70 && wpm < 90) return 78;
   if (wpm > 170 && wpm <= 200) return 78;
@@ -222,21 +238,16 @@ async function analyzePronunciationFromAudio(
 
   const segments = Array.isArray(json?.segments) ? json.segments : [];
   const segLogprobs = segments
-    .map((s: any) =>
-      typeof s?.avg_logprob === "number" ? s.avg_logprob : null
-    )
+    .map((s: any) => (typeof s?.avg_logprob === "number" ? s.avg_logprob : null))
     .filter((n: number | null): n is number => n != null);
 
-  const avgLogprob =
-    segLogprobs.length > 0 ? avg(segLogprobs) : null;
+  const avgLogprob = segLogprobs.length > 0 ? avg(segLogprobs) : null;
 
   const words = Array.isArray(json?.words) ? json.words : [];
-  const transcriptText =
-    typeof json?.text === "string" ? json.text : "";
+  const transcriptText = typeof json?.text === "string" ? json.text : "";
 
   const wc = words.length > 0 ? words.length : wordCount(transcriptText);
-  const wpm =
-    durationSec > 0 && wc > 0 ? (wc / durationSec) * 60 : null;
+  const wpm = durationSec > 0 && wc > 0 ? (wc / durationSec) * 60 : null;
 
   return {
     durationSec,
@@ -266,7 +277,6 @@ async function computePronunciationScore(
     };
   }
 
-  // 비용/지연 제어: 최근 3개만 샘플
   const sampleTurns = audioTurns.slice(-3);
 
   const evals: AudioEval[] = [];
@@ -299,9 +309,7 @@ async function computePronunciationScore(
   }
 
   const avgLogprob = avg(
-    evals
-      .map((e) => e.avgLogprob)
-      .filter((n): n is number => n != null)
+    evals.map((e) => e.avgLogprob).filter((n): n is number => n != null)
   );
 
   const validWpms = evals
@@ -310,9 +318,7 @@ async function computePronunciationScore(
 
   const avgWpm = validWpms.length ? avg(validWpms) : null;
 
-  const logprobScore = logprobToScore(
-    Number.isFinite(avgLogprob) ? avgLogprob : null
-  );
+  const logprobScore = logprobToScore(Number.isFinite(avgLogprob) ? avgLogprob : null);
   const pacingScore = wpmToScore(avgWpm);
 
   const audioCoverage = sampleTurns.length / Math.max(1, userTurnsWithAudio.length);
@@ -339,29 +345,181 @@ async function computePronunciationScore(
   };
 }
 
-function buildBasicInsight(latest: any) {
-  const { score_c, score_a, score_f, score_p } = latest;
+// ---------------------
+// 점수 기반 fallback 문장
+// ---------------------
+function buildFallbackInsight(params: {
+  scenarioTitle: string;
+  score_c: number;
+  score_a: number;
+  score_f: number;
+  score_p: number;
+  overall: number;
+  sessionCount: number;
+}) {
+  const { scenarioTitle, score_c, score_a, score_f, score_p, overall, sessionCount } = params;
 
-  const pairs = [
-    { k: "C(Complexity)", v: score_c },
-    { k: "A(Accuracy)", v: score_a },
-    { k: "F(Fluency)", v: score_f },
-    { k: "P(Pronunciation)", v: score_p },
-  ].sort((a, b) => b.v - a.v);
+  const topLabel =
+    [
+      { key: "논리와 전개", v: score_c },
+      { key: "정확성", v: score_a },
+      { key: "유창성", v: score_f },
+      { key: "발음 전달력", v: score_p },
+    ].sort((a, b) => b.v - a.v)[0]?.key ?? "대화 수행";
 
-  const strengths = [
-    `${pairs[0].k}가 상대적으로 좋아요 (${pairs[0].v}점).`,
-    `${pairs[1].k}도 안정적이에요 (${pairs[1].v}점).`,
-  ];
+  const lowLabel =
+    [
+      { key: "논리와 전개", v: score_c },
+      { key: "정확성", v: score_a },
+      { key: "유창성", v: score_f },
+      { key: "발음 전달력", v: score_p },
+    ].sort((a, b) => a.v - b.v)[0]?.key ?? "표현력";
 
-  const improvements = [
-    `${pairs[3].k}를 올리면 전체 점수가 더 잘 올라가요 (${pairs[3].v}점).`,
-    `${pairs[2].k}도 조금만 더 다듬으면 좋아요 (${pairs[2].v}점).`,
-  ];
+  return {
+    summary:
+      sessionCount <= 1
+        ? `${scenarioTitle} 상황에서 기본적인 의도를 전달하고 대화를 이어갈 수 있는 수준이에요.`
+        : `${scenarioTitle} 같은 실전 상황에서 이전보다 더 안정적으로 의도를 전달하고 대화를 이어가고 있어요.`,
+    strengths: [
+      `${scenarioTitle} 맥락에서 필요한 말을 끝까지 이어가며 대화를 유지했어요.`,
+      `${topLabel} 측면이 비교적 안정적으로 드러났어요.`,
+    ],
+    improvements: [
+      `${lowLabel}을 조금 더 다듬으면 전체 전달력이 더 좋아질 수 있어요.`,
+      `실전 상황을 가정해 한 문장씩 또렷하게 말하는 연습을 이어가 보세요.`,
+    ],
+  };
+}
 
-  const summary = `최근 세션 기준으로 ${pairs[0].k} 강점이 뚜렷하고, ${pairs[3].k} 개선 여지가 있어요.`;
+// ---------------------
+// LLM 기반 맥락형 리포트 생성
+// ---------------------
+async function generateContextualSessionInsight(params: {
+  openaiApiKey: string;
+  scenarioTitle: string;
+  scenarioDesc: string;
+  latestTurns: TurnRow[];
+  score_c: number;
+  score_a: number;
+  score_f: number;
+  score_p: number;
+  score_overall: number;
+  totalSessions: number;
+}) {
+  const {
+    openaiApiKey,
+    scenarioTitle,
+    scenarioDesc,
+    latestTurns,
+    score_c,
+    score_a,
+    score_f,
+    score_p,
+    score_overall,
+    totalSessions,
+  } = params;
 
-  return { summary, strengths, improvements };
+  const conversation = latestTurns
+    .map((t) => ({
+      role: (t.role || "").toLowerCase(),
+      text: t.text_raw ?? "",
+    }))
+    .filter((t) => t.text.trim())
+    .slice(-12);
+
+  const system = `
+You are writing a short learner-facing English speaking report in Korean.
+Your job is NOT to mention C/A/F/P labels directly unless absolutely necessary.
+Focus on:
+1) what the learner can now do in this scenario,
+2) what they did well in this session,
+3) one or two actionable improvements.
+
+Return JSON only:
+{
+  "summary": "string",
+  "strengths": ["string", "string"],
+  "improvements": ["string", "string"]
+}
+
+Rules:
+- Write naturally in Korean.
+- Be specific to the scenario and conversation context.
+- Strengths should sound like achievement effects or concrete session feedback.
+- Improvements should be constructive and actionable.
+- Avoid technical scoring jargon.
+- Do not mention raw numbers in the text unless needed.
+- Keep each bullet concise.
+`.trim();
+
+  const user = {
+    scenarioTitle,
+    scenarioDesc,
+    totalSessions,
+    scores: {
+      complexity: score_c,
+      accuracy: score_a,
+      fluency: score_f,
+      pronunciation: score_p,
+      overall: score_overall,
+    },
+    conversation,
+  };
+
+  const res = await fetch("https://api.openai.com/v1/responses", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${openaiApiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "gpt-4.1-mini",
+      input: [
+        { role: "system", content: system },
+        { role: "user", content: JSON.stringify(user) },
+      ],
+      text: { format: { type: "json_object" } },
+    }),
+  });
+
+  if (!res.ok) {
+    const detail = await res.text();
+    throw new Error(`insight generation failed: ${res.status} ${detail}`);
+  }
+
+  const json = await res.json();
+
+  let text = "";
+  if (typeof json?.output_text === "string" && json.output_text.trim()) {
+    text = json.output_text.trim();
+  } else if (Array.isArray(json?.output)) {
+    for (const item of json.output) {
+      const content = item?.content;
+      if (!Array.isArray(content)) continue;
+      for (const c of content) {
+        if (typeof c?.text === "string" && c.text.trim()) {
+          text = c.text.trim();
+          break;
+        }
+      }
+      if (text) break;
+    }
+  }
+
+  const parsed = safeJsonParse(text);
+  if (!parsed) {
+    throw new Error("invalid insight json");
+  }
+
+  return {
+    summary: typeof parsed.summary === "string" ? parsed.summary : "",
+    strengths: Array.isArray(parsed.strengths)
+      ? parsed.strengths.filter((x: unknown) => typeof x === "string").slice(0, 3)
+      : [],
+    improvements: Array.isArray(parsed.improvements)
+      ? parsed.improvements.filter((x: unknown) => typeof x === "string").slice(0, 3)
+      : [],
+  };
 }
 
 Deno.serve(async (req) => {
@@ -409,17 +567,19 @@ Deno.serve(async (req) => {
     if (sessErr) throw new Error(sessErr.message);
 
     const sessions = (sessRows ?? []) as SessionRow[];
-
     const updatedSessions: SessionRow[] = [];
 
-    for (const s of sessions) {
+    for (let idx = 0; idx < sessions.length; idx++) {
+      const s = sessions[idx];
       const reportMeta = s.report_insight ?? {};
+
       const needRecompute =
         s.score_c == null ||
         s.score_a == null ||
         s.score_f == null ||
         s.score_p == null ||
         s.score_overall == null ||
+        reportMeta?.insight_version !== "context_v2" ||
         reportMeta?.p_source !== "audio_v1";
 
       if (!needRecompute) {
@@ -438,6 +598,14 @@ Deno.serve(async (req) => {
         updatedSessions.push(s);
         continue;
       }
+
+      const { data: scenarioData } = await supabase
+        .from("scenarios")
+        .select("scenario_id,title,scenario_desc")
+        .eq("scenario_id", s.scenario_id)
+        .maybeSingle();
+
+      const scenario = (scenarioData ?? null) as ScenarioLite | null;
 
       const t = (turns ?? []) as TurnRow[];
 
@@ -478,12 +646,37 @@ Deno.serve(async (req) => {
         100
       );
 
-      const insight = buildBasicInsight({
-        score_c,
-        score_a,
-        score_f,
-        score_p,
-      });
+      let contextualInsight: {
+        summary: string;
+        strengths: string[];
+        improvements: string[];
+      };
+
+      try {
+        contextualInsight = await generateContextualSessionInsight({
+          openaiApiKey: OPENAI_API_KEY,
+          scenarioTitle: scenario?.title ?? "이 시나리오",
+          scenarioDesc: scenario?.scenario_desc ?? "",
+          latestTurns: takeLast(t, 12),
+          score_c,
+          score_a,
+          score_f,
+          score_p,
+          score_overall,
+          totalSessions: idx + 1,
+        });
+      } catch (e) {
+        console.error("generateContextualSessionInsight error:", e);
+        contextualInsight = buildFallbackInsight({
+          scenarioTitle: scenario?.title ?? "이 시나리오",
+          score_c,
+          score_a,
+          score_f,
+          score_p,
+          overall: score_overall,
+          sessionCount: idx + 1,
+        });
+      }
 
       const patch = {
         score_c,
@@ -492,7 +685,9 @@ Deno.serve(async (req) => {
         score_p,
         score_overall,
         report_insight: {
-          ...insight,
+          ...contextualInsight,
+          insight_version: "context_v2",
+          scenario_title: scenario?.title ?? null,
           p_source: pResult.meta.source,
           p_meta: pResult.meta,
         },
@@ -524,24 +719,33 @@ Deno.serve(async (req) => {
     const avgP = Math.round(avg(series.map((x) => x.p)));
     const avgOverall = Math.round(avg(series.map((x) => x.overall)));
 
-    const cumulativeSummary =
-      series.length === 0
-        ? "아직 기록이 없어요. 첫 세션을 완료하면 성장 그래프가 쌓여요."
-        : `지금까지 ${series.length}회 누적 기준, 종합 점수 평균은 ${avgOverall}점이에요.`;
-
     const latestSession = updatedSessions.length
       ? updatedSessions[updatedSessions.length - 1]
       : null;
 
-    const insight = latest
-      ? {
-          summary: `${cumulativeSummary} 최근 세션은 ${latest.overall}점이에요.`,
-          detail: {
-            strengths: (latestSession?.report_insight?.strengths ?? []).slice(0, 3),
-            improvements: (latestSession?.report_insight?.improvements ?? []).slice(0, 3),
-          },
-        }
-      : { summary: cumulativeSummary, detail: { strengths: [], improvements: [] } };
+    const insight =
+      latestSession?.report_insight
+        ? {
+            summary:
+              typeof latestSession.report_insight.summary === "string"
+                ? latestSession.report_insight.summary
+                : "이번 세션의 종합 인사이트를 준비 중이에요.",
+            detail: {
+              strengths: Array.isArray(latestSession.report_insight.strengths)
+                ? latestSession.report_insight.strengths.slice(0, 3)
+                : [],
+              improvements: Array.isArray(latestSession.report_insight.improvements)
+                ? latestSession.report_insight.improvements.slice(0, 3)
+                : [],
+            },
+          }
+        : {
+            summary:
+              series.length === 0
+                ? "아직 기록이 없어요. 첫 세션을 완료하면 성장 그래프가 쌓여요."
+                : `최근 세션 기준 종합 점수는 ${latest?.overall ?? 0}점이에요.`,
+            detail: { strengths: [], improvements: [] },
+          };
 
     return new Response(
       JSON.stringify({

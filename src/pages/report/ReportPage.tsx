@@ -1,4 +1,3 @@
-// src/pages/report/ReportPage.tsx
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
@@ -28,7 +27,6 @@ function normalizeVariant(v: unknown): "a" | "b" {
   return s === "b" ? "b" : "a";
 }
 
-/** 영어 단어 토크나이저(간단) */
 function tokenizeEn(text: string): string[] {
   return (text || "")
     .toLowerCase()
@@ -38,21 +36,20 @@ function tokenizeEn(text: string): string[] {
     .filter(Boolean);
 }
 
-// ---------- Simple SVG Area Chart (A용) ----------
 function AreaChart({
   values,
   stroke,
   fillId,
-  height = 180,
+  height = 220,
 }: {
   values: number[];
   stroke: string;
   fillId: string;
   height?: number;
 }) {
-  const width = 320;
-  const padX = 14;
-  const padY = 12;
+  const width = 420;
+  const padX = 18;
+  const padY = 16;
 
   const maxV = Math.max(1, ...values);
   const n = Math.max(1, values.length);
@@ -81,20 +78,26 @@ function AreaChart({
     <svg className={styles.chartSvg} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none">
       <defs>
         <linearGradient id={fillId} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={stroke} stopOpacity="0.28" />
-          <stop offset="100%" stopColor={stroke} stopOpacity="0.0" />
+          <stop offset="0%" stopColor={stroke} stopOpacity="0.32" />
+          <stop offset="100%" stopColor={stroke} stopOpacity="0.08" />
         </linearGradient>
       </defs>
 
       {pts.length > 0 && <path d={dArea} fill={`url(#${fillId})`} stroke="none" />}
       {pts.length > 0 && (
-        <path d={dLine} fill="none" stroke={stroke} strokeWidth="2.5" strokeLinejoin="round" />
+        <path
+          d={dLine}
+          fill="none"
+          stroke={stroke}
+          strokeWidth="2.5"
+          strokeLinejoin="round"
+          strokeLinecap="round"
+        />
       )}
     </svg>
   );
 }
 
-// ===================== B용 타입/컴포넌트 =====================
 type ReportResponseB = {
   ok: boolean;
   totals: {
@@ -123,10 +126,10 @@ function clamp(n: number, lo: number, hi: number) {
 }
 
 function Radar({ c, a, f, p }: { c: number; a: number; f: number; p: number }) {
-  const size = 140;
+  const size = 170;
   const cx = size / 2;
   const cy = size / 2;
-  const r = 52;
+  const r = 60;
 
   const toPt = (angleDeg: number, value: number) => {
     const v = clamp(value, 0, 100) / 100;
@@ -148,24 +151,31 @@ function Radar({ c, a, f, p }: { c: number; a: number; f: number; p: number }) {
           key={i}
           points={`${cx},${cy - r * k} ${cx + r * k},${cy} ${cx},${cy + r * k} ${cx - r * k},${cy}`}
           fill="none"
-          stroke="rgba(0,0,0,0.08)"
+          stroke="rgba(78,85,94,0.12)"
+          strokeWidth="1"
         />
       ))}
-      <line x1={cx} y1={cy - r} x2={cx} y2={cy + r} stroke="rgba(0,0,0,0.08)" />
-      <line x1={cx - r} y1={cy} x2={cx + r} y2={cy} stroke="rgba(0,0,0,0.08)" />
 
-      <polygon points={poly} fill="rgba(153,169,190,0.45)" stroke="rgba(153,169,190,1)" />
+      <line x1={cx} y1={cy - r} x2={cx} y2={cy + r} stroke="rgba(78,85,94,0.12)" />
+      <line x1={cx - r} y1={cy} x2={cx + r} y2={cy} stroke="rgba(78,85,94,0.12)" />
 
-      <text x={cx} y={cy - r - 8} textAnchor="middle" fontSize="12" fill="#4E555E">
+      <polygon
+        points={poly}
+        fill="rgba(153,169,190,0.42)"
+        stroke="rgba(143,160,184,1)"
+        strokeWidth="2"
+      />
+
+      <text x={cx} y={cy - r - 10} textAnchor="middle" fontSize="13" fill="#4E555E">
         C
       </text>
-      <text x={cx - r - 10} y={cy + 4} textAnchor="middle" fontSize="12" fill="#4E555E">
+      <text x={cx - r - 12} y={cy + 4} textAnchor="middle" fontSize="13" fill="#4E555E">
         A
       </text>
-      <text x={cx} y={cy + r + 16} textAnchor="middle" fontSize="12" fill="#4E555E">
+      <text x={cx} y={cy + r + 18} textAnchor="middle" fontSize="13" fill="#4E555E">
         F
       </text>
-      <text x={cx + r + 12} y={cy + 4} textAnchor="middle" fontSize="12" fill="#4E555E">
+      <text x={cx + r + 14} y={cy + 4} textAnchor="middle" fontSize="13" fill="#4E555E">
         P
       </text>
     </svg>
@@ -195,13 +205,15 @@ function Bars({ c, a, f, p }: { c: number; a: number; f: number; p: number }) {
 }
 
 function MiniArea({ values }: { values: number[] }) {
-  const w = 140;
-  const h = 70;
-  const pad = 6;
+  const w = 220;
+  const h = 100;
+  const pad = 10;
 
   if (!values.length) return <div className={styles.miniEmpty}>-</div>;
 
-  const xs = values.map((_, i) => (values.length === 1 ? w / 2 : (i / (values.length - 1)) * (w - pad * 2) + pad));
+  const xs = values.map((_, i) =>
+    values.length === 1 ? w / 2 : (i / (values.length - 1)) * (w - pad * 2) + pad
+  );
   const ys = values.map((v) => {
     const t = clamp(v, 0, 100) / 100;
     return (1 - t) * (h - pad * 2) + pad;
@@ -211,14 +223,13 @@ function MiniArea({ values }: { values: number[] }) {
   const area = `${pad},${h - pad} ${line} ${w - pad},${h - pad}`;
 
   return (
-    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`}>
-      <polygon points={area} fill="rgba(153,169,190,0.35)" />
-      <polyline points={line} fill="none" stroke="rgba(153,169,190,1)" strokeWidth="2" />
+    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} className={styles.miniSvg}>
+      <polygon points={area} fill="rgba(153,169,190,0.32)" />
+      <polyline points={line} fill="none" stroke="rgba(143,160,184,1)" strokeWidth="2.5" />
     </svg>
   );
 }
 
-// ===================== Page =====================
 export default function ReportPage() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -228,11 +239,9 @@ export default function ReportPage() {
   const [loading, setLoading] = useState(true);
   const [fatal, setFatal] = useState<string | null>(null);
 
-  // A용: 누적 단어
   const [newWordsCum, setNewWordsCum] = useState<number[]>([]);
   const [spokenWordsCum, setSpokenWordsCum] = useState<number[]>([]);
 
-  // B용: CAFP/인사이트/추이
   const [bData, setBData] = useState<ReportResponseB | null>(null);
 
   useEffect(() => {
@@ -250,9 +259,6 @@ export default function ReportPage() {
           return;
         }
 
-        // =========================
-        // ✅ B 리포트: Edge Function
-        // =========================
         if (isB) {
           const { data: sess } = await supabase.auth.getSession();
           const accessToken = sess.session?.access_token;
@@ -287,11 +293,6 @@ export default function ReportPage() {
           return;
         }
 
-        // =========================
-        // ✅ A 리포트: 기존 단어 누적
-        // =========================
-        // variant 컬럼이 "A"/"a" 혼재해도 대응
-        // (원하면 필터 제거하고 전부 계산해도 됨)
         const { data: sData, error: sErr } = await supabase
           .from("roleplay_sessions")
           .select("session_id,started_at,ended_at,status,variant")
@@ -300,8 +301,6 @@ export default function ReportPage() {
 
         if (sErr) throw new Error(sErr.message);
         const allSessions = (sData ?? []) as SessionRowLite[];
-
-        // A만 필터
         const sessions = allSessions.filter((s) => normalizeVariant(s.variant) === "a");
 
         if (sessions.length === 0) {
@@ -314,7 +313,6 @@ export default function ReportPage() {
 
         const sessionIds = sessions.map((s) => s.session_id);
 
-        // roleplay_turns에서 user 발화만 가져오기 (chunk in)
         const allTurns: TurnRowLite[] = [];
         const chunkSize = 50;
 
@@ -332,7 +330,6 @@ export default function ReportPage() {
           allTurns.push(...((tData ?? []) as TurnRowLite[]));
         }
 
-        // session별 unique / total
         const uniqueMap = new Map<string, Set<string>>();
         const totalMap = new Map<string, number>();
         for (const sid of sessionIds) {
@@ -350,7 +347,6 @@ export default function ReportPage() {
           for (const w of tokens) set.add(w);
         }
 
-        // 누적 합
         const newCum: number[] = [];
         const spokenCum: number[] = [];
         let accNew = 0;
@@ -383,20 +379,32 @@ export default function ReportPage() {
     };
   }, [navigate, isB]);
 
-  // 공통
+  function goHome() {
+    navigate(`/${variant}/home`);
+  }
+
+  function goReport() {
+    navigate(`/${variant}/report`);
+  }
+
+  async function handleLogout() {
+    try {
+      await supabase.auth.signOut();
+    } catch (error) {
+      console.error("logout error:", error);
+    } finally {
+      navigate("/auth/login");
+    }
+  }
+
   if (loading) return <div className={styles.loading}>불러오는 중…</div>;
   if (fatal) return <div className={styles.loading}>에러: {fatal}</div>;
 
-  // =========================
-  // ✅ B UI
-  // =========================
   if (isB) {
     const totals = bData?.totals;
     const avg = totals?.avg ?? { c: 0, a: 0, f: 0, p: 0, overall: 0 };
 
     const series = bData?.series ?? [];
-    //const nameLabel = "00"; // 추후 프로필 이름 연결하면 교체
-
     const seriesC = series.map((x) => x.c);
     const seriesA = series.map((x) => x.a);
     const seriesF = series.map((x) => x.f);
@@ -404,21 +412,29 @@ export default function ReportPage() {
 
     return (
       <div className={styles.container}>
-        {/* Header */}
-        <div className={styles.header}>
-          <button className={styles.back} onClick={() => navigate(-1)} aria-label="back">
-            <img src="/back.png" alt="뒤로가기" />
+        <header className={styles.topHeader}>
+          <button type="button" className={styles.logoButton} onClick={goHome}>
+            Engorish
           </button>
-          <div className={styles.headerTitle}>성취탭</div>
-          <div style={{ width: 44 }} />
-        </div>
 
-        <div className={styles.body}>
-          {/* 종합 인사이트 */}
-          <div className={styles.section}>
+          <div className={styles.headerActions}>
+            <button type="button" className={styles.iconButton} onClick={goHome} aria-label="home">
+              <img src="/home.svg" alt="" />
+            </button>
+            <button type="button" className={styles.iconButton} onClick={goReport} aria-label="report">
+              <img src="/report.svg" alt="" />
+            </button>
+            <button type="button" className={styles.iconButton} onClick={handleLogout} aria-label="logout">
+              <img src="/out.svg" alt="" />
+            </button>
+          </div>
+        </header>
+
+        <main className={styles.body}>
+          <section className={styles.section}>
             <div className={styles.sectionTitle}>종합 인사이트</div>
             <div className={styles.insightCard}>
-              <div className={styles.insightBadge}>한문장 요약</div>
+              <div className={styles.insightBadgeGreen}>한문장 요약</div>
               <div className={styles.insightText}>{bData?.insight?.summary ?? "요약을 준비 중이에요."}</div>
 
               {!!(bData?.insight?.detail?.strengths?.length) && (
@@ -429,10 +445,9 @@ export default function ReportPage() {
                 </ul>
               )}
             </div>
-          </div>
+          </section>
 
-          {/* 종합 점수 */}
-          <div className={styles.section} style={{ marginTop: 18 }}>
+          <section className={styles.section}>
             <div className={styles.sectionTitle}>종합 점수</div>
 
             <div className={styles.scoreCard}>
@@ -443,74 +458,77 @@ export default function ReportPage() {
                 <Radar c={avg.c} a={avg.a} f={avg.f} p={avg.p} />
               </div>
             </div>
-          </div>
+          </section>
 
-          {/* 성장 */}
-          <div className={styles.section} style={{ marginTop: 18 }}>
-            <div className={styles.sectionTitle}>나의 성장</div>
+          <section className={styles.section}>
+            <div className={styles.sectionTitle}>세부 변화</div>
 
             <div className={styles.miniGrid}>
               <div className={styles.miniCard}>
                 <div className={styles.miniTitle}>Complexity</div>
                 <MiniArea values={seriesC} />
               </div>
+
               <div className={styles.miniCard}>
                 <div className={styles.miniTitle}>Accuracy</div>
                 <MiniArea values={seriesA} />
               </div>
+
               <div className={styles.miniCard}>
                 <div className={styles.miniTitle}>Fluency</div>
                 <MiniArea values={seriesF} />
               </div>
+
               <div className={styles.miniCard}>
                 <div className={styles.miniTitle}>Pronunciation</div>
                 <MiniArea values={seriesP} />
               </div>
             </div>
-          </div>
+          </section>
 
-          {/* 더 나아지기 위해서 */}
-          <div className={styles.section} style={{ marginTop: 18 }}>
+          <section className={styles.section}>
             <div className={styles.sectionTitle}>더 나아지기 위해서</div>
-            <div className={styles.improveCard}>
-              <div className={styles.improveBadge}>개선점 요약</div>
+            <div className={styles.insightCard}>
+              <div className={styles.insightBadgeRed}>개선점 요약</div>
               <ul className={styles.insightList}>
                 {(bData?.insight?.detail?.improvements ?? []).slice(0, 3).map((t, i) => (
                   <li key={`i-${i}`}>{t}</li>
                 ))}
               </ul>
             </div>
-          </div>
-        </div>
-
-        <div style={{ height: 24 }} />
+          </section>
+        </main>
       </div>
     );
   }
 
-  // =========================
-  // ✅ A UI (기존)
-  // =========================
   const totalPlays = newWordsCum.length;
   const latestNew = totalPlays ? newWordsCum[totalPlays - 1] : 0;
   const latestSpoken = totalPlays ? spokenWordsCum[totalPlays - 1] : 0;
-
   const BLUE_GRAY = "#8FA0B8";
 
   return (
     <div className={styles.container}>
-      {/* Header */}
-      <div className={styles.header}>
-        <button className={styles.back} onClick={() => navigate(-1)} aria-label="back">
-          <img src="/back.png" alt="뒤로가기" />
+      <header className={styles.topHeader}>
+        <button type="button" className={styles.logoButton} onClick={goHome}>
+          Engorish
         </button>
-        <div className={styles.headerTitle}>성취탭</div>
-        <div style={{ width: 44 }} />
-      </div>
 
-      <div className={styles.body}>
-        {/* Section 1 */}
-        <div className={styles.section}>
+        <div className={styles.headerActions}>
+          <button type="button" className={styles.iconButton} onClick={goHome} aria-label="home">
+            <img src="/home.svg" alt="" />
+          </button>
+          <button type="button" className={styles.iconButton} onClick={goReport} aria-label="report">
+            <img src="/report.svg" alt="" />
+          </button>
+          <button type="button" className={styles.iconButton} onClick={handleLogout} aria-label="logout">
+            <img src="/out.svg" alt="" />
+          </button>
+        </div>
+      </header>
+
+      <main className={styles.body}>
+        <section className={styles.section}>
           <div className={styles.sectionTitle}>새로운 단어</div>
           <div className={styles.sectionValue}>{latestNew}</div>
 
@@ -521,10 +539,9 @@ export default function ReportPage() {
               <AreaChart values={newWordsCum} stroke={BLUE_GRAY} fillId="grad_new" />
             )}
           </div>
-        </div>
+        </section>
 
-        {/* Section 2 */}
-        <div className={styles.section} style={{ marginTop: 18 }}>
+        <section className={styles.section}>
           <div className={styles.sectionTitle}>말한 단어</div>
           <div className={styles.sectionValue}>{latestSpoken}</div>
 
@@ -535,10 +552,8 @@ export default function ReportPage() {
               <AreaChart values={spokenWordsCum} stroke={BLUE_GRAY} fillId="grad_spoken" />
             )}
           </div>
-        </div>
-      </div>
-
-      <div style={{ height: 24 }} />
+        </section>
+      </main>
     </div>
   );
 }
