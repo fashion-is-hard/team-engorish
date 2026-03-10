@@ -218,11 +218,361 @@ export default function PlayPage() {
       const ext = "webm";
       const filePath = `session_${sessionId}/user_${Date.now()}_${crypto.randomUUID()}.${ext}`;
 
+<<<<<<< HEAD
       const { error } = await supabase.storage
         .from("audio")
         .upload(filePath, blob, {
           contentType: "audio/webm",
           upsert: true,
+=======
+    if (!res.ok) {
+      throw new Error(`goal_check ${res.status}: ${JSON.stringify(json)}`);
+    }
+
+    return json as { achieved_goal_ids: string[] };
+  }
+
+  async function handleRealtimeEvent(event: any) {
+    const userText = extractRealtimeUserText(event);
+
+    if (userText && sessionId) {
+      lastUserTextRef.current = userText;
+      setHasUserStarted(true);
+
+      const userNo = await getNextTurnNo();
+      const { data: uTurn, error: uErr } = await supabase
+        .from("roleplay_turns")
+        .insert({
+          session_id: sessionId,
+          turn_no: userNo,
+          role: "user",
+          text_raw: userText,
+        })
+        .select("turn_id,created_at")
+        .single();
+
+      if (!uErr && uTurn) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: uTurn.turn_id,
+            role: "user",
+            text: userText,
+            createdAt: new Date(uTurn.created_at).getTime(),
+          },
+        ]);
+      }
+
+      const currentSession = sessionRef.current;
+      const nextUserCount = (currentSession?.turn_count_user ?? 0) + 1;
+
+      await supabase
+        .from("roleplay_sessions")
+        .update({ turn_count_user: nextUserCount })
+        .eq("session_id", sessionId);
+
+      setSession((prev) => (prev ? { ...prev, turn_count_user: nextUserCount } : prev));
+    }
+
+    const aiText = extractRealtimeAssistantText(event);
+
+    if (aiText && sessionId) {
+      const aiNo = await getNextTurnNo();
+      const { data: aTurn, error: aErr } = await supabase
+        .from("roleplay_turns")
+        .insert({
+          session_id: sessionId,
+          turn_no: aiNo,
+          role: "ai",
+          text_raw: aiText,
+        })
+        .select("turn_id,created_at")
+        .single();
+
+      if (!aErr && aTurn) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: aTurn.turn_id,
+            role: "ai",
+            text: aiText,
+            createdAt: new Date(aTurn.created_at).getTime(),
+          },
+        ]);
+      }
+
+      const currentSession = sessionRef.current;
+      const nextAiCount = (currentSession?.turn_count_ai ?? 0) + 1;
+
+      await supabase
+        .from("roleplay_sessions")
+        .update({ turn_count_ai: nextAiCount })
+        .eq("session_id", sessionId);
+
+      setSession((prev) => (prev ? { ...prev, turn_count_ai: nextAiCount } : prev));
+
+      if (
+        isBRef.current &&
+        goalsRef.current.length > 0 &&
+        lastUserTextRef.current &&
+        scenarioRef.current?.scenario_id
+      ) {
+        try {
+          const out = await checkGoalsWithEdge({
+            sessionId,
+            scenarioId: scenarioRef.current.scenario_id,
+            userText: lastUserTextRef.current,
+            aiText,
+            goals: goalsRef.current,
+          });
+
+          const achieved = Array.isArray(out?.achieved_goal_ids) ? out.achieved_goal_ids : [];
+          if (achieved.length > 0) {
+            setCheckedGoalIds((prev) => {
+              const next = { ...prev };
+              achieved.forEach((id) => {
+                next[id] = true;
+              });
+              return next;
+            });
+          }
+        } catch (e) {
+          console.error("goal_check failed", e);
+        }
+      }
+
+      if (!isBRef.current) {
+        const latestSession = sessionRef.current;
+        const nextPairTurns = Math.min(
+          latestSession?.turn_count_user ?? 0,
+          (latestSession?.turn_count_ai ?? 0) + 1
+        );
+
+        if (nextPairTurns >= turnLimitRef.current) {
+          void endSession("turn_limit");
+        }
+      }
+
+      setPlayState("idle");
+    }
+  }
+
+  async function ensureRealtimeConnected() {
+    if (realtimeRef.current?.isConnected()) return;
+    if (!scenario) throw new Error("scenario not loaded");
+
+    setConnecting(true);
+
+    const { data: authSess } = await supabase.auth.getSession();
+    const accessToken = authSess.session?.access_token;
+    const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
+
+    const origFetch = window.fetch;
+    window.fetch = async (input, init) => {
+      if (typeof input === "string" && input.includes("realtime_session")) {
+        const res = await origFetch(input, init);
+        if (!res.ok) return res;
+        const text = await res.text();
+        let json: any = null;
+        try {
+          json = JSON.parse(text);
+        } catch {
+          return new Response(text, { status: res.status, headers: res.headers });
+        }
+        
+        // Fix the token extraction bug: If the edge function failed to extract it into 'value', we find it in raw.
+        const token = json.value || json.raw?.value || json.raw?.client_secret?.value;
+        if (token) {
+          return new Response(JSON.stringify({ value: token }), { status: res.status, headers: res.headers });
+        }
+        return new Response(text, { status: res.status, headers: res.headers });
+      }
+      return origFetch(input, init);
+    };
+
+    const client = new RealtimeVoiceClient({
+      tokenEndpoint: `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/realtime_session`,
+      tokenHeaders: {
+        apikey: anonKey,
+        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+      },
+      sessionPayload: {
+        voice: "marin",
+        instructions: [
+          // ⚡ 최우선 언어 설정: OpenAI 기본 다국어 지시를 덮어쓰기 위해 맨 앞에 배치
+          "CRITICAL: You MUST respond ONLY in English at all times, regardless of what language the user speaks. Never switch to any other language.",
+          "You are roleplaying as an NPC in an English conversation training app.",
+          "Keep each reply natural and short.",
+          "Ask one question at a time.",
+          "Stay in character.",
+          `Scenario title: ${scenario.title}`,
+          scenario.scenario_desc ? `Scenario situation: ${scenario.scenario_desc}` : "",
+          `You are: ${npc?.role_name ?? "NPC"}`,
+          npc?.role_desc ? `Role details: ${npc.role_desc}` : "",
+          `Difficulty: ${settings?.difficulty ?? "basic"}`,
+          `Correction mode: ${settings?.correction_mode ?? "suggest"}`,
+          "The user is speaking with voice. Reply with conversational spoken English.",
+        ]
+          .filter(Boolean)
+          .join("\n"),
+      },
+      onRemoteAudioStart: () => setIsAiSpeaking(true),
+      onRemoteAudioStop: () => setIsAiSpeaking(false),
+      onError: (message) => {
+        console.error("[Realtime] 연결 중 오류:", message);
+        // 연결 중 발생한 오류를 사용자에게 즉시 알립니다
+        alert(`음성 연결 오류: ${message}`);
+        setPlayState("idle");
+        setConnecting(false);
+      },
+      onEvent: async (event) => {
+        await handleRealtimeEvent(event);
+      },
+    });
+
+    try {
+      await client.connect();
+      realtimeRef.current = client;
+    } catch (e) {
+      // 연결 실패 시 생성된 WebRTC 연결, audio 요소 등을 모두 정리합니다
+      client.close();
+      throw e;
+    } finally {
+      window.fetch = origFetch;
+      setConnecting(false);
+    }
+  }
+
+  async function connectRealtimeWithRetry(maxRetries = 3) {
+    let lastError: any = null;
+
+    for (let i = 0; i < maxRetries; i++) {
+      try {
+        await ensureRealtimeConnected();
+        return;
+      } catch (e) {
+        lastError = e;
+        console.error(`Realtime connect retry ${i + 1}/${maxRetries} failed`, e);
+
+        if (i < maxRetries - 1) {
+          await new Promise((r) => setTimeout(r, 1000 * (i + 1)));
+        }
+      }
+    }
+
+    throw lastError;
+  }
+
+  useEffect(() => {
+    if (!sessionId) return;
+
+    (async () => {
+      setLoading(true);
+      setFatal(null);
+
+      const { data: auth } = await supabase.auth.getUser();
+      if (!auth.user) {
+        navigate("/auth/login");
+        return;
+      }
+
+      const { data: sData, error: sErr } = await supabase
+        .from("roleplay_sessions")
+        .select("*")
+        .eq("session_id", sessionId)
+        .single();
+
+      if (sErr) {
+        setFatal(sErr.message);
+        setLoading(false);
+        return;
+      }
+
+      const sess = sData as SessionRow;
+      setSession(sess);
+
+      if (!sess.scenario_id) {
+        setFatal("세션에 scenario_id가 없습니다.");
+        setLoading(false);
+        return;
+      }
+
+      const { data: scData, error: scErr } = await supabase
+        .from("scenarios")
+        .select("scenario_id,package_id,title,scenario_desc,thumb_url")
+        .eq("scenario_id", sess.scenario_id)
+        .single();
+
+      if (scErr) {
+        setFatal(scErr.message);
+        setLoading(false);
+        return;
+      }
+      const sc = scData as ScenarioRow;
+      setScenario(sc);
+
+      const { data: npcData } = await supabase
+        .from("scenario_npcs")
+        .select("npc_id,scenario_id,role_name,role_desc,avatar_url,sort_order")
+        .eq("scenario_id", sc.scenario_id)
+        .order("sort_order", { ascending: true })
+        .limit(1);
+      setNpc(npcData && npcData.length > 0 ? (npcData[0] as NpcRow) : null);
+
+      const { data: setData } = await supabase
+        .from("session_settings")
+        .select("session_id,correction_mode,difficulty,question_speed")
+        .eq("session_id", sessionId)
+        .maybeSingle();
+      if (setData) setSettings(setData as SettingsRow);
+
+      const { data: tData, error: tErr } = await supabase
+        .from("roleplay_turns")
+        .select("turn_id,session_id,turn_no,role,text_raw,text_corrected,created_at")
+        .eq("session_id", sessionId)
+        .order("turn_no", { ascending: true });
+
+      if (tErr) {
+        setFatal(tErr.message);
+        setLoading(false);
+        return;
+      }
+
+      const turns = (tData ?? []) as DbTurn[];
+      const msgs: Msg[] = turns.map((t) => ({
+        id: t.turn_id,
+        role: t.role === "assistant" || t.role === "ai" ? "ai" : "user",
+        text: t.text_raw ?? "",
+        correctedText: t.text_corrected,
+        createdAt: new Date(t.created_at).getTime(),
+      }));
+      setMessages(msgs);
+      setHasUserStarted(msgs.some((m) => m.role === "user" && m.text.trim().length > 0));
+
+      const effectiveVariant = normalizeVariant(sess.variant ?? pathVariant);
+      if (effectiveVariant === "b") {
+        const { data: gData, error: gErr } = await supabase
+          .from("scenario_goals")
+          .select(
+            "goal_id,scenario_id,goal_title,goal_type,goal_definition,success_threshold,version,is_active,created_at"
+          )
+          .eq("scenario_id", sc.scenario_id)
+          .eq("is_active", true)
+          .order("created_at", { ascending: true });
+
+        if (gErr) {
+          setFatal(gErr.message);
+          setLoading(false);
+          return;
+        }
+
+        const gList = (gData ?? []) as ScenarioGoalRow[];
+        setGoals(gList);
+
+        const init: Record<string, boolean> = {};
+        gList.forEach((g) => {
+          init[g.goal_id] = false;
+>>>>>>> refs/remotes/origin/feature/sehee
         });
 
       if (error) {
