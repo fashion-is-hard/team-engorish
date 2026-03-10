@@ -1,179 +1,458 @@
-.container{
-width:100%;
-height:100vh;
-display:flex;
-flex-direction:column;
-background:#F3F4F6;
+.container {
+  width: 100%;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: #f3f4f7;
+  overflow: hidden;
+  font-family: "AtoZ", system-ui, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR",
+    Arial, sans-serif;
 }
 
-/* 상단 헤더 */
-
-.header{
-background:#4E555E;
-color:white;
-padding:14px 0;
-text-align:center;
-font-size:20px;
-font-weight:600;
+.topHeader {
+  width: 100%;
+  height: 72px;
+  background: #58606b;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  box-sizing: border-box;
+  flex-shrink: 0;
 }
 
-/* 목표 카드 */
-
-.goalCard{
-background:white;
-border-radius:12px;
-padding:16px;
-width:420px;
-max-width:90%;
-margin:20px auto;
-box-shadow:0 4px 10px rgba(0,0,0,0.05);
+.logoButton {
+  border: none;
+  background: none;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  color: #ffffff;
+  font-size: 28px;
+  line-height: 1;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  font-family: inherit;
 }
 
-.goalItem{
-margin:6px 0;
-color:#374151;
-font-size:14px;
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: 18px;
 }
 
-/* 채팅 영역 */
-
-.chatArea{
-flex:1;
-width:100%;
-max-width:700px;
-margin:0 auto;
-padding:10px 16px;
-overflow-y:auto;
+.iconButton {
+  width: 30px;
+  height: 30px;
+  border: none;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-/* 채팅 행 */
-
-.row{
-display:flex;
-margin:10px 0;
+.iconButton img {
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
 }
 
-.left{
-justify-content:flex-start;
+.sessionHeader {
+  background: #f3f4f7;
+  border-bottom: 1px solid rgba(78, 85, 94, 0.08);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  padding: 18px 20px 12px;
+  flex-shrink: 0;
 }
 
-.right{
-justify-content:flex-end;
+.sessionHeaderInner {
+  position: relative;
+  max-width: 760px;
+  margin: 0 auto;
+  text-align: center;
 }
 
-/* 채팅 버블 */
-
-.bubble{
-padding:12px 16px;
-border-radius:16px;
-max-width:340px;
-font-size:15px;
-line-height:1.4;
-word-break:break-word;
+.sessionTitle {
+  font-size: 28px;
+  line-height: 1.2;
+  font-weight: 700;
+  color: #4e555e;
 }
 
-.assistantBubble{
-background:#CBD5E1;
-color:#1F2937;
+.sessionTimer {
+  margin-top: 4px;
+  font-size: 16px;
+  line-height: 1.2;
+  font-weight: 600;
+  color: #93a5be;
 }
 
-.userBubble{
-background:white;
-box-shadow:0 2px 6px rgba(0,0,0,0.1);
+.closeButton {
+  position: absolute;
+  right: 0;
+  top: 2px;
+  border: none;
+  background: none;
+  color: #5b6470;
+  font-size: 40px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
 }
 
-/* 하단 마이크 영역 */
-
-.bottom{
-padding:20px 0 30px 0;
-display:flex;
-flex-direction:column;
-align-items:center;
+.progressWrap {
+  max-width: 620px;
+  margin: 14px auto 0;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  align-items: center;
 }
 
-.status{
-margin-bottom:14px;
-color:#6B7280;
-font-size:14px;
+.progressBar {
+  height: 8px;
+  border-radius: 999px;
+  background: #d8dbe0;
+  overflow: hidden;
 }
 
-/* 마이크 버튼 */
-
-.mic{
-width:70px;
-height:70px;
-border-radius:50%;
-border:none;
-background:#4B5563;
-color:white;
-font-size:28px;
-cursor:pointer;
-display:flex;
-align-items:center;
-justify-content:center;
-transition:all .15s ease;
+.progressFill {
+  height: 100%;
+  border-radius: 999px;
+  background: #c6ccd6;
 }
 
-.mic:hover{
-background:#374151;
+.progressText {
+  font-size: 16px;
+  font-weight: 600;
+  color: #93a5be;
+  min-width: 56px;
+  text-align: right;
 }
 
-.mic:active{
-transform:scale(0.95);
+.main {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 18px 20px 0;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
 }
 
-.liveBubble{
-opacity:0.75;
+.descCard {
+  width: 100%;
+  max-width: 640px;
+  margin: 0 auto 20px;
+  background: #d6d8dd;
+  border-radius: 10px;
+  padding: 14px 16px;
+  box-sizing: border-box;
+  flex-shrink: 0;
 }
 
-.modalOverlay{
-position:fixed;
-inset:0;
-background:rgba(0,0,0,0.35);
-display:flex;
-align-items:center;
-justify-content:center;
-z-index:1000;
-padding:20px;
+.descTitle {
+  font-size: 15px;
+  font-weight: 700;
+  color: #4e555e;
+  margin-bottom: 6px;
 }
 
-.modalCard{
-width:100%;
-max-width:380px;
-background:white;
-border-radius:16px;
-padding:24px 20px;
-box-shadow:0 10px 30px rgba(0,0,0,0.18);
-text-align:center;
+.descBody {
+  font-size: 14px;
+  line-height: 1.5;
+  color: #4e555e;
+  font-weight: 500;
 }
 
-.modalTitle{
-font-size:18px;
-font-weight:700;
-color:#111827;
-margin-bottom:10px;
+.goalCard {
+  width: 100%;
+  max-width: 640px;
+  margin: 0 auto 20px;
+  background: #99a9be;
+  border-radius: 10px;
+  padding: 10px;
+  box-sizing: border-box;
+  flex-shrink: 0;
 }
 
-.modalText{
-font-size:14px;
-line-height:1.5;
-color:#4B5563;
-margin-bottom:18px;
+.goalLabel {
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 700;
+  margin-bottom: 8px;
 }
 
-.modalButton{
-width:100%;
-height:48px;
-border:none;
-border-radius:12px;
-background:#4B5563;
-color:white;
-font-size:15px;
-font-weight:600;
-cursor:pointer;
+.goalInner {
+  background: #ffffff;
+  border-radius: 8px;
+  padding: 2px 14px;
 }
 
-.modalButton:disabled{
-opacity:0.6;
-cursor:not-allowed;
+.goalItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+}
+
+.goalItem + .goalItem {
+  border-top: 1px solid #e5e7eb;
+}
+
+.goalIcon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.goalText {
+  font-size: 15px;
+  line-height: 1.45;
+  font-weight: 500;
+  color: #4e555e;
+}
+
+.chatArea {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  max-width: 640px;
+  margin: 0 auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 0 0 20px;
+  box-sizing: border-box;
+  scroll-behavior: smooth;
+}
+
+.left,
+.right {
+  display: flex;
+  margin: 12px 0;
+}
+
+.left {
+  justify-content: flex-start;
+}
+
+.right {
+  justify-content: flex-end;
+}
+
+.bubble {
+  padding: 14px 16px;
+  border-radius: 14px;
+  max-width: 320px;
+  font-size: 15px;
+  line-height: 1.45;
+  word-break: break-word;
+  box-sizing: border-box;
+}
+
+.assistantBubble {
+  background: #c7d2df;
+  color: #4e555e;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.06);
+}
+
+.userBubble {
+  background: #ffffff;
+  color: #4e555e;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.liveBubble {
+  opacity: 0.75;
+}
+
+.bottom {
+  flex-shrink: 0;
+  padding: 18px 20px 28px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: #f3f4f7;
+  border-top: 1px solid rgba(78, 85, 94, 0.06);
+}
+
+.status {
+  margin-bottom: 16px;
+  color: #4e555e;
+  font-size: 15px;
+  text-align: center;
+  line-height: 1.45;
+}
+
+.mic {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  width: 96px;
+  height: 96px;
+  transition: transform 0.12s ease, filter 0.12s ease;
+}
+
+.mic:hover {
+  filter: brightness(0.98);
+}
+
+.mic:active {
+  transform: scale(0.97);
+}
+
+.mic:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.micIcon {
+  width: 96px;
+  height: 96px;
+  object-fit: contain;
+  display: block;
+}
+
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.modalCard {
+  width: 100%;
+  max-width: 380px;
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 24px 20px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
+  text-align: center;
+}
+
+.modalTitle {
+  font-size: 18px;
+  font-weight: 700;
+  color: #111827;
+  margin-bottom: 10px;
+}
+
+.modalText {
+  font-size: 14px;
+  line-height: 1.5;
+  color: #4b5563;
+  margin-bottom: 18px;
+}
+
+.modalButton {
+  width: 100%;
+  height: 48px;
+  border: none;
+  border-radius: 12px;
+  background: #4b5563;
+  color: #ffffff;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.modalButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+@media (max-width: 768px) {
+  .topHeader {
+    padding: 0 16px;
+    height: 64px;
+  }
+
+  .logoButton {
+    font-size: 26px;
+  }
+
+  .headerActions {
+    gap: 12px;
+  }
+
+  .sessionHeader {
+    padding: 16px 16px 10px;
+  }
+
+  .sessionTitle {
+    font-size: 22px;
+  }
+
+  .sessionTimer {
+    font-size: 14px;
+  }
+
+  .closeButton {
+    font-size: 34px;
+  }
+
+  .main {
+    padding: 16px 16px 0;
+  }
+
+  .descCard,
+  .goalCard,
+  .chatArea {
+    max-width: 100%;
+  }
+
+  .bubble {
+    max-width: 280px;
+    font-size: 14px;
+    padding: 12px 14px;
+  }
+
+  .status {
+    font-size: 14px;
+  }
+
+ .mic {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  width: 96px;
+  height: 96px;
+  transition: transform 0.12s ease, filter 0.12s ease;
+}
+
+.mic:hover {
+  filter: brightness(0.98);
+}
+
+.mic:active {
+  transform: scale(0.97);
+}
+
+.mic:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.micIcon {
+  width: 96px;
+  height: 96px;
+  object-fit: contain;
+  display: block;
+}
 }

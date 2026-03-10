@@ -12,6 +12,7 @@ import PrivacyPage from "@/pages/auth/PrivacyPage";
 import NotFoundPage from "@/pages/NotFoundPage";
 
 import HomePage from "@/pages/home/HomePage";
+import CategoryPage from "@/pages/category/CategoryPage";
 import PackagePage from "@/pages/package/PackagePage";
 import ScenarioDetailPage from "@/pages/scenario/ScenarioDetailPage";
 import PlayPage from "@/pages/play/PlayPage";
@@ -27,6 +28,7 @@ function RequireAuth() {
 const makeVariantChildren = (variant: "a" | "b") => [
   { index: true, element: <Navigate to={`/${variant}/home`} replace /> },
   { path: "home", element: <HomePage /> },
+  { path: "categories", element: <CategoryPage /> },
   { path: "categories", element: <Navigate to={`/${variant}/home`} replace /> },
   { path: "packages/:packageId", element: <PackagePage /> },
   { path: "scenarios/:scenarioId", element: <ScenarioDetailPage /> },

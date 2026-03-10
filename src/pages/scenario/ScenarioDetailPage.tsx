@@ -1,4 +1,3 @@
-// src/pages/scenario/ScenarioDetailPage.tsx
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
@@ -27,21 +26,25 @@ const NOTICE_A: NoticeSection[] = [
 ];
 
 const NOTICE_B: NoticeSection[] = [
-  { title: "마이크 사용권한",
+  {
+    title: "마이크 사용권한",
     bullets: [
       "AI와 대화를 나누기 위해서는 마이크 사용 권한이 필요해요.",
       "말이 끝나면 반드시 마이크 버튼을 다시 눌러주세요.",
       "기술적 한계로 인해 버튼을 너무 빨리 누르면 인식이 안 될 수도 있어요.",
       "말을 끝마치고 1초 정도 기다리신 후 눌러주시면 감사하겠습니다.",
-    ], },
-  { title: "대화종료", bullets: ["대화는 목적을 달성하면 자동으로 종료돼요.", "그 전에 대화를 끝내고 싶으시면 오른쪽 X 버튼을 눌러주세요.",] },
+    ],
+  },
+  {
+    title: "대화종료",
+    bullets: [
+      "대화는 목적을 달성하면 자동으로 종료돼요.",
+      "그 전에 대화를 끝내고 싶으시면 오른쪽 닫기 버튼을 눌러주세요.",
+    ],
+  },
 ];
 
 type RouteParams = { scenarioId?: string };
-
-function getVariantFromPathname(pathname: string): "a" | "b" {
-  return pathname.startsWith("/b") ? "b" : "a";
-}
 
 type ScenarioGoalRowDb = {
   goal_id: string;
@@ -55,12 +58,21 @@ type ScenarioGoalRowDb = {
   created_at: string | null;
 };
 
+function getVariantFromPathname(pathname: string): "a" | "b" {
+  return pathname.startsWith("/b") ? "b" : "a";
+}
+
+function getBasePath(pathname: string) {
+  return pathname.startsWith("/b") ? "/b" : "/a";
+}
+
 export default function ScenarioDetailPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { scenarioId } = useParams<RouteParams>();
 
   const variant = useMemo(() => getVariantFromPathname(location.pathname), [location.pathname]);
+  const basePath = useMemo(() => getBasePath(location.pathname), [location.pathname]);
   const isB = variant === "b";
 
   const [categoryName, setCategoryName] = useState("");
@@ -69,7 +81,6 @@ export default function ScenarioDetailPage() {
 
   const [scenario, setScenario] = useState<ScenarioRow | null>(null);
   const [pkg, setPkg] = useState<PackageRow | null>(null);
-
   const [examples, setExamples] = useState<ScenarioExampleLineRow[]>([]);
   const [goals, setGoals] = useState<ScenarioGoalRowDb[]>([]);
 
@@ -85,7 +96,9 @@ export default function ScenarioDetailPage() {
 
         const { data: sData, error: sErr } = await supabase
           .from("scenarios")
-          .select("scenario_id,package_id,title,scenario_desc,is_active,sort_order,created_at,thumb_url")
+          .select(
+            "scenario_id,package_id,title,scenario_desc,is_active,sort_order,created_at,thumb_url"
+          )
           .eq("scenario_id", scenarioId)
           .single();
 
@@ -97,7 +110,9 @@ export default function ScenarioDetailPage() {
 
         const { data: pData, error: pErr } = await supabase
           .from("packages")
-          .select("package_id,category_id,title,description,thumb_url,sort_order,is_active,created_at")
+          .select(
+            "package_id,category_id,title,description,thumb_url,sort_order,is_active,created_at"
+          )
           .eq("package_id", s.package_id)
           .single();
 
@@ -135,7 +150,9 @@ export default function ScenarioDetailPage() {
         if (isB) {
           const { data: gData, error: gErr } = await supabase
             .from("scenario_goals")
-            .select("goal_id,scenario_id,goal_title,goal_type,goal_definition,success_threshold,version,is_active,created_at")
+            .select(
+              "goal_id,scenario_id,goal_title,goal_type,goal_definition,success_threshold,version,is_active,created_at"
+            )
             .eq("scenario_id", scenarioId);
 
           if (cancelled) return;
@@ -174,7 +191,16 @@ export default function ScenarioDetailPage() {
   }, [scenarioId, isB]);
 
   const heroImg = useMemo(() => {
-    if (scenario?.thumb_url && scenario.thumb_url.trim()) return `/${scenario.thumb_url}.png`;
+    if (scenario?.thumb_url && scenario.thumb_url.trim()) {
+      if (
+        scenario.thumb_url.startsWith("/") ||
+        scenario.thumb_url.startsWith("http://") ||
+        scenario.thumb_url.startsWith("https://")
+      ) {
+        return scenario.thumb_url;
+      }
+      return `/${scenario.thumb_url}.png`;
+    }
     return "/scenario.png";
   }, [scenario]);
 
@@ -221,16 +247,42 @@ export default function ScenarioDetailPage() {
       return;
     }
 
-    navigate(`/${variant}/play/${session_id}`);
+    navigate(`${basePath}/play/${session_id}`);
+  }
+
+  function goHome() {
+    navigate(`${basePath}/home`);
+  }
+
+  function goReport() {
+    navigate(`${basePath}/report`);
+  }
+
+  function handleLogout() {
+    navigate("/auth/login");
   }
 
   return (
     <div className={styles.container}>
-      <div className={styles.header}>
-        <button className={styles.back} onClick={() => navigate(-1)} aria-label="back">
-          <img src="/back.svg" alt="뒤로가기" />
+      <header className={styles.topHeader}>
+        <button type="button" className={styles.logoButton} onClick={goHome}>
+          Engorish
         </button>
-      </div>
+
+        <div className={styles.headerActions}>
+          <button type="button" className={styles.iconButton} onClick={goHome} aria-label="home">
+            <img src="/home.svg" alt="" />
+          </button>
+
+          <button type="button" className={styles.iconButton} onClick={goReport} aria-label="report">
+            <img src="/report.svg" alt="" />
+          </button>
+
+          <button type="button" className={styles.iconButton} onClick={handleLogout} aria-label="logout">
+            <img src="/out.svg" alt="" />
+          </button>
+        </div>
+      </header>
 
       {loading && <div className={styles.helper}>불러오는 중…</div>}
       {error && <div className={styles.error}>에러: {error}</div>}
@@ -270,7 +322,6 @@ export default function ScenarioDetailPage() {
           <div className={styles.sectionPill}>대화 목적</div>
           <div className={styles.card}>
             {goals.length === 0 && <div className={styles.empty}>대화 목적이 없습니다.</div>}
-
             {goals.map((g, idx) => (
               <div key={g.goal_id} className={styles.goalRow}>
                 <img src="/check_dis.svg" className={styles.goalCheck} alt="" />
@@ -288,7 +339,7 @@ export default function ScenarioDetailPage() {
             <div className={styles.noticeTitle}>{sec.title}</div>
             {sec.bullets.map((b, i) => (
               <div key={`${sec.title}-${i}`} className={styles.noticeBody}>
-                - {b}
+                • {b}
               </div>
             ))}
           </div>
@@ -296,7 +347,11 @@ export default function ScenarioDetailPage() {
       </div>
 
       <div className={styles.bottomBar}>
-        <button className={styles.cta} onClick={startSession} disabled={loading || !!error || !scenario}>
+        <button
+          className={styles.cta}
+          onClick={startSession}
+          disabled={loading || !!error || !scenario}
+        >
           시작하기
         </button>
       </div>

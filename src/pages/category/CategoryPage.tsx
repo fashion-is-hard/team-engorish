@@ -1,155 +1,304 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
-import type { LearningCategoryRow, PackageRow } from "@/types/db";
 import styles from "./CategoryPage.module.css";
-import { fetchUserProgress } from "@/services/progress";
 
-type VariantPath = "a" | "b";
-function normalizeVariant(v: unknown): VariantPath {
-  return v === "b" ? "b" : "a";
+type CategoryRow = {
+  category_id: string;
+  name: string;
+  sort_order: number | null;
+  is_active: boolean;
+};
+
+type PackageRow = {
+  package_id: string;
+  category_id: string;
+  title: string;
+  description: string | null;
+  thumb_url: string | null;
+  sort_order: number | null;
+  is_active: boolean;
+};
+
+type ScenarioRowLite = {
+  scenario_id: string;
+  package_id: string;
+  is_active: boolean;
+};
+
+type SessionRowLite = {
+  session_id: string;
+  package_id: string | null;
+  scenario_id: string | null;
+  status: string;
+};
+
+type PackageProgress = {
+  totalScenarios: number;
+  completedScenarios: number;
+  state: "complete" | "progress" | "not-started";
+};
+
+function getBasePath(pathname: string) {
+  return pathname.startsWith("/b") ? "/b" : "/a";
+}
+
+function normalizeThumb(src: string | null | undefined) {
+  if (!src) return "/scenario.png";
+  if (src.startsWith("http://") || src.startsWith("https://") || src.startsWith("/")) {
+    return src;
+  }
+  return `/${src}.png`;
 }
 
 export default function CategoryPage() {
   const navigate = useNavigate();
-  const params = useParams();
-  const variant = normalizeVariant((params as any).variant);
+  const location = useLocation();
+
+  const basePath = getBasePath(location.pathname);
 
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [fatal, setFatal] = useState<string | null>(null);
 
-  const [categories, setCategories] = useState<LearningCategoryRow[]>([]);
-  const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null);
+  const [categories, setCategories] = useState<CategoryRow[]>([]);
   const [packages, setPackages] = useState<PackageRow[]>([]);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string>("");
 
-  // ✅ 진행도 맵
-  const [pkgProgMap, setPkgProgMap] = useState<Record<string, any>>({});
+  const [progressMap, setProgressMap] = useState<Record<string, PackageProgress>>({});
 
-  // 0) 유저 진행도 로드(배지용)
   useEffect(() => {
-    (async () => {
-      try {
-        const prog = await fetchUserProgress();
-        setPkgProgMap(prog.packageProgressMap);
-      } catch (e: any) {
-        // 로그인 안 된 경우도 있을 수 있음
-        console.warn(e?.message ?? e);
-      }
-    })();
+    void loadPage();
   }, []);
 
-  // 1) 카테고리 로드
-  useEffect(() => {
-    (async () => {
+  async function loadPage() {
+    try {
       setLoading(true);
-      setError(null);
+      setFatal(null);
 
-      const { data, error } = await supabase
-        .from("learning_categories")
-        .select("category_id,name,sort_order,is_active,created_at")
-        .eq("is_active", true)
-        .order("sort_order", { ascending: true });
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
 
-      if (error) {
-        setError(error.message);
-        setLoading(false);
+      if (userError || !user) {
+        navigate("/auth/login", { replace: true });
         return;
       }
 
-      const list = (data ?? []) as LearningCategoryRow[];
-      setCategories(list);
-      if (list.length > 0) setActiveCategoryId(list[0].category_id);
+      const [
+        { data: categoryData, error: categoryError },
+        { data: packageData, error: packageError },
+        { data: scenarioData, error: scenarioError },
+        { data: sessionData, error: sessionError },
+      ] = await Promise.all([
+        supabase
+          .from("learning_categories")
+          .select("category_id, name, sort_order, is_active")
+          .eq("is_active", true)
+          .order("sort_order", { ascending: true }),
+
+        supabase
+          .from("packages")
+          .select("package_id, category_id, title, description, thumb_url, sort_order, is_active")
+          .eq("is_active", true)
+          .order("sort_order", { ascending: true }),
+
+        supabase
+          .from("scenarios")
+          .select("scenario_id, package_id, is_active")
+          .eq("is_active", true),
+
+        supabase
+          .from("roleplay_sessions")
+          .select("session_id, package_id, scenario_id, status")
+          .eq("user_id", user.id)
+          .eq("status", "ended"),
+      ]);
+
+      if (categoryError) throw new Error(categoryError.message);
+      if (packageError) throw new Error(packageError.message);
+      if (scenarioError) throw new Error(scenarioError.message);
+      if (sessionError) throw new Error(sessionError.message);
+
+      const nextCategories = (categoryData ?? []) as CategoryRow[];
+      const nextPackages = (packageData ?? []) as PackageRow[];
+      const nextScenarios = (scenarioData ?? []) as ScenarioRowLite[];
+      const nextSessions = (sessionData ?? []) as SessionRowLite[];
+
+      setCategories(nextCategories);
+      setPackages(nextPackages);
+
+      if (nextCategories.length > 0) {
+        setSelectedCategoryId(nextCategories[0].category_id);
+      }
+
+      // package별 전체 scenario 수
+      const totalScenarioMap: Record<string, number> = {};
+      nextScenarios.forEach((s) => {
+        totalScenarioMap[s.package_id] = (totalScenarioMap[s.package_id] ?? 0) + 1;
+      });
+
+      // package별 완료 scenario 집합
+      const completedScenarioSetMap: Record<string, Set<string>> = {};
+      nextSessions.forEach((s) => {
+        if (!s.package_id || !s.scenario_id) return;
+        if (!completedScenarioSetMap[s.package_id]) {
+          completedScenarioSetMap[s.package_id] = new Set<string>();
+        }
+        completedScenarioSetMap[s.package_id].add(s.scenario_id);
+      });
+
+      const nextProgressMap: Record<string, PackageProgress> = {};
+      nextPackages.forEach((pkg) => {
+        const total = totalScenarioMap[pkg.package_id] ?? 0;
+        const completed = completedScenarioSetMap[pkg.package_id]?.size ?? 0;
+
+        let state: PackageProgress["state"] = "not-started";
+        if (completed > 0 && completed < total) state = "progress";
+        if (total > 0 && completed >= total) state = "complete";
+
+        nextProgressMap[pkg.package_id] = {
+          totalScenarios: total,
+          completedScenarios: completed,
+          state,
+        };
+      });
+
+      setProgressMap(nextProgressMap);
       setLoading(false);
-    })();
-  }, []);
-
-  // 2) 선택된 카테고리의 패키지 로드
-  useEffect(() => {
-    if (!activeCategoryId) return;
-
-    (async () => {
-      setError(null);
-
-      const { data, error } = await supabase
-        .from("packages")
-        .select("package_id,category_id,title,description,thumb_url,sort_order,is_active,created_at")
-        .eq("is_active", true)
-        .eq("category_id", activeCategoryId)
-        .order("sort_order", { ascending: true });
-
-      if (error) {
-        setError(error.message);
-        return;
-      }
-
-      setPackages((data ?? []) as PackageRow[]);
-    })();
-  }, [activeCategoryId]);
-
-  const activeName = useMemo(() => {
-    return categories.find((c) => c.category_id === activeCategoryId)?.name ?? "";
-  }, [categories, activeCategoryId]);
-
-  function getThumbSrc(fileName?: string | null) {
-    if (fileName && fileName.trim()) return `/${fileName}.png`;
-    return "/package.png";
+    } catch (error) {
+      console.error(error);
+      setFatal(error instanceof Error ? error.message : "불러오기에 실패했습니다.");
+      setLoading(false);
+    }
   }
 
-  function getBadgeInfo(packageId: string) {
-    const p = pkgProgMap?.[packageId];
-    if (!p) return { text: "시작 전", cls: styles.badgeNotStarted };
-    if (p.isClear) return { text: "완료", cls: styles.badgeClear };
-    if (p.isInProgress) return { text: "진행 중", cls: styles.badgeProgress };
-    return { text: "시작 전", cls: styles.badgeNotStarted };
+  const selectedCategoryName = useMemo(() => {
+    return categories.find((c) => c.category_id === selectedCategoryId)?.name ?? "";
+  }, [categories, selectedCategoryId]);
+
+  const visiblePackages = useMemo(() => {
+    return packages.filter((pkg) => pkg.category_id === selectedCategoryId);
+  }, [packages, selectedCategoryId]);
+
+  function goHome() {
+    navigate(`${basePath}/home`);
+  }
+
+  function goReport() {
+    navigate(`${basePath}/report`);
+  }
+
+  function handleLogout() {
+    navigate("/auth/login");
+  }
+
+  function openPackage(packageId: string) {
+    navigate(`${basePath}/packages/${packageId}`);
+  }
+
+  function getBadgeLabel(state: PackageProgress["state"]) {
+    if (state === "complete") return "완료";
+    if (state === "progress") return "진행중";
+    return "시작전";
+  }
+
+  function getBadgeClass(state: PackageProgress["state"]) {
+    if (state === "complete") return styles.badgeComplete;
+    if (state === "progress") return styles.badgeProgress;
+    return styles.badgeNotStarted;
+  }
+
+  if (loading) {
+    return <div className={styles.loading}>불러오는 중…</div>;
+  }
+
+  if (fatal) {
+    return <div className={styles.loading}>에러: {fatal}</div>;
   }
 
   return (
     <div className={styles.container}>
-      {/* HEADER */}
-      <div className={styles.header}>
-        <button className={styles.back} onClick={() => navigate(`/${variant}/home`)}>
-          <img src="/back.png" alt="뒤로가기" />
+      <header className={styles.header}>
+        <button type="button" className={styles.logoButton} onClick={goHome}>
+          Engorish
         </button>
-        <h1>학습영역</h1>
-      </div>
 
-      {/* TITLE */}
-      <h2 className={styles.sectionTitle}>{activeName || "학습영역"}</h2>
-
-      {/* TABS */}
-      <div className={styles.tabs}>
-        {categories.map((c) => (
-          <button
-            key={c.category_id}
-            className={`${styles.tab} ${c.category_id === activeCategoryId ? styles.activeTab : ""}`}
-            onClick={() => setActiveCategoryId(c.category_id)}
-          >
-            {c.name}
+        <div className={styles.headerActions}>
+          <button type="button" className={styles.iconButton} onClick={goHome} aria-label="home">
+            <img src="/home.svg" alt="" />
           </button>
-        ))}
-      </div>
 
-      {loading && <div className={styles.helper}>불러오는 중…</div>}
-      {error && <div className={styles.error}>에러: {error}</div>}
+          <button type="button" className={styles.iconButton} onClick={goReport} aria-label="report">
+            <img src="/report.svg" alt="" />
+          </button>
 
-      {/* GRID */}
-      <div className={styles.grid}>
-        {packages.map((p) => {
-          const badge = getBadgeInfo(p.package_id);
-          return (
-            <div
-              key={p.package_id}
-              className={styles.card}
-              onClick={() => navigate(`/${variant}/packages/${p.package_id}`)}
-            >
-              <img src={getThumbSrc(p.thumb_url)} className={styles.image} alt={p.title} />
+          <button type="button" className={styles.iconButton} onClick={handleLogout} aria-label="logout">
+            <img src="/out.svg" alt="" />
+          </button>
+        </div>
+      </header>
 
-              <span className={`${styles.badge} ${badge.cls}`}>{badge.text}</span>
-              <p className={styles.name}>{p.title}</p>
-            </div>
-          );
-        })}
-      </div>
+      <main className={styles.main}>
+        <h1 className={styles.title}>{selectedCategoryName || "카테고리"}</h1>
+
+        <div className={styles.tabRow}>
+          {categories.map((category) => {
+            const active = category.category_id === selectedCategoryId;
+            return (
+              <button
+                key={category.category_id}
+                type="button"
+                className={`${styles.tabButton} ${active ? styles.tabButtonActive : ""}`}
+                onClick={() => setSelectedCategoryId(category.category_id)}
+              >
+                {category.name}
+              </button>
+            );
+          })}
+        </div>
+
+        <div className={styles.grid}>
+          {visiblePackages.map((pkg) => {
+            const progress = progressMap[pkg.package_id] ?? {
+              totalScenarios: 0,
+              completedScenarios: 0,
+              state: "not-started" as const,
+            };
+
+            return (
+              <button
+                key={pkg.package_id}
+                type="button"
+                className={styles.card}
+                onClick={() => openPackage(pkg.package_id)}
+              >
+                <div className={styles.cardImageWrap}>
+                  <img
+                    className={styles.cardImage}
+                    src={normalizeThumb(pkg.thumb_url)}
+                    alt={pkg.title}
+                  />
+                </div>
+
+                <div className={styles.cardBody}>
+                  <div className={`${styles.badge} ${getBadgeClass(progress.state)}`}>
+                    {getBadgeLabel(progress.state)}
+                  </div>
+
+                  <div className={styles.cardTitle}>{pkg.title}</div>
+
+                  {progress.totalScenarios > 0 && (
+                    <div className={styles.cardMeta}>
+                      {progress.completedScenarios}/{progress.totalScenarios}
+                    </div>
+                  )}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </main>
     </div>
   );
 }
