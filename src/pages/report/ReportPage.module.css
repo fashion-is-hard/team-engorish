@@ -1,6 +1,6 @@
 .container {
   min-height: 100dvh;
-  background: #f3f4f7;
+  background: #F7F8FB;
   color: #4e555e;
   font-family: "AtoZ", system-ui, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR",
     Arial, sans-serif;
@@ -19,12 +19,12 @@
 
 .topHeader {
   width: 100%;
-  height: 72px;
-  background: #58606b;
+  height: 64px;
+  background: #4e555e;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 20px;
+  padding: 0 28px;
   box-sizing: border-box;
 }
 
@@ -35,7 +35,7 @@
   margin: 0;
   cursor: pointer;
   color: #ffffff;
-  font-size: 28px;
+  font-size: 24px;
   line-height: 1;
   font-weight: 700;
   letter-spacing: -0.03em;
@@ -45,12 +45,12 @@
 .headerActions {
   display: flex;
   align-items: center;
-  gap: 18px;
+  gap: 24px;
 }
 
 .iconButton {
-  width: 30px;
-  height: 30px;
+  width: 24px;
+  height: 24px;
   border: none;
   background: transparent;
   padding: 0;
@@ -61,8 +61,8 @@
 }
 
 .iconButton img {
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   object-fit: contain;
 }
 
@@ -82,16 +82,16 @@
 }
 
 .sectionTitle {
-  font-size: 22px;
-  font-weight: 800;
+  font-size: 20px;
+  font-weight: 600;
   color: #4e555e;
   line-height: 1.2;
 }
 
 .sectionValue {
-  font-size: 18px;
-  font-weight: 700;
-  color: #111111;
+  font-size: 16px;
+  font-weight: 600;
+  color: #4e555e;
   margin-top: -2px;
 }
 
@@ -250,47 +250,3 @@
   font-weight: 700;
 }
 
-@media (max-width: 768px) {
-  .topHeader {
-    height: 64px;
-    padding: 0 16px;
-  }
-
-  .logoButton {
-    font-size: 26px;
-  }
-
-  .headerActions {
-    gap: 12px;
-  }
-
-  .body {
-    max-width: 100%;
-    padding: 22px 16px 30px;
-  }
-
-  .sectionTitle {
-    font-size: 18px;
-  }
-
-  .sectionValue {
-    font-size: 16px;
-  }
-
-  .chartSvg {
-    height: 240px;
-  }
-
-  .scoreCard {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .scoreRight {
-    width: 100%;
-  }
-
-  .miniGrid {
-    grid-template-columns: 1fr;
-  }
-}

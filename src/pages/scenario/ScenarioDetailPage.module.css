@@ -1,5 +1,5 @@
 .container {
-  background: #f3f4f7;
+  background: #F7F8FB;
   min-height: 100dvh;
   padding-bottom: 108px;
   font-family: "AtoZ", system-ui, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR",
@@ -8,8 +8,8 @@
 
 .topHeader {
   width: 100%;
-  height: 72px;
-  background: #58606b;
+  height: 64px;
+  background: #4E555E;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -24,7 +24,7 @@
   margin: 0;
   cursor: pointer;
   color: #ffffff;
-  font-size: 28px;
+  font-size: 24px;
   line-height: 1;
   font-weight: 700;
   letter-spacing: -0.03em;
@@ -39,8 +39,8 @@
 }
 
 .iconButton {
-  width: 30px;
-  height: 30px;
+  width: 24px;
+  height: 24px;
   border: none;
   background: transparent;
   padding: 0;
@@ -51,21 +51,21 @@
 }
 
 .iconButton img {
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   object-fit: contain;
 }
 
 .helper {
   padding: 12px 16px 0;
-  color: #666;
-  font-size: 13px;
+  color: #6F757E;
+  font-size: 14px;
 }
 
 .error {
   padding: 12px 16px 0;
-  color: #b00020;
-  font-size: 13px;
+  color: #FF8F8F;
+  font-size: 14px;
 }
 
 .top {
@@ -77,9 +77,9 @@
 }
 
 .heroImg {
-  width: 110px;
-  height: 110px;
-  border-radius: 10px;
+  width: 120px;
+  height: 120px;
+  border-radius: 4px;
   object-fit: cover;
   background: #e9eef6;
   display: block;
@@ -91,27 +91,27 @@
   align-items: center;
   justify-content: center;
   min-width: 62px;
-  height: 28px;
-  padding: 0 14px;
-  border-radius: 8px;
+  height: 20px;
+  padding: 0 10px;
+  border-radius: 4px;
   background: #99a9be;
   color: #ffffff;
   font-weight: 600;
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .title {
   margin: 12px 0 0;
-  font-size: 26px;
-  font-weight: 700;
+  font-size: 18px;
+  font-weight: 600;
   color: #4e555e;
   line-height: 1.2;
 }
 
 .sub {
   margin: 8px 0 0;
-  font-size: 15px;
-  font-weight: 600;
+  font-size: 14px;
+  font-weight: 500;
   color: #99a9be;
 }
 
@@ -119,7 +119,6 @@
   width: 100%;
   max-width: 640px;
   margin: 14px auto 0;
-  padding: 0 16px;
   box-sizing: border-box;
 }
 
@@ -128,13 +127,13 @@
   align-items: center;
   justify-content: center;
   min-width: 78px;
-  height: 26px;
-  padding: 0 14px;
+  height: 24px;
+  padding: 0 10px;
   border-radius: 999px;
   background: #99a9be;
   color: #ffffff;
   font-weight: 600;
-  font-size: 13px;
+  font-size: 12px;
   margin-bottom: 10px;
 }
 
@@ -148,7 +147,7 @@
 .cardText {
   margin: 0;
   color: #4e555e;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 500;
   line-height: 1.55;
 }
@@ -160,19 +159,19 @@
 }
 
 .exampleRow {
-  padding: 10px 0;
+  padding: 8px;
 }
 
 .exampleEn {
-  font-size: 15px;
-  font-weight: 600;
+  font-size: 14px;
+  font-weight: 500;
   color: #4e555e;
   line-height: 1.4;
 }
 
 .exampleKo {
-  margin-top: 6px;
-  font-size: 13px;
+  margin-top: 4px;
+  font-size: 12px;
   font-weight: 500;
   color: #99a9be;
   line-height: 1.35;
@@ -180,7 +179,7 @@
 
 .exampleDivider {
   height: 1px;
-  background: #e5e7eb;
+  background: #B0B6BD;
   margin-top: 12px;
 }
 
@@ -208,9 +207,9 @@
   width: 100%;
   max-width: 640px;
   margin: 18px auto 0;
-  padding: 14px 16px;
-  background: #d7d9de;
-  border-radius: 10px;
+  padding: 16px;
+  background: #C2CBD8;
+  border-radius: 8px;
   box-sizing: border-box;
 }
 
@@ -219,14 +218,14 @@
 }
 
 .noticeTitle {
-  font-size: 15px;
-  font-weight: 700;
+  font-size: 14px;
+  font-weight: 600;
   color: #4e555e;
 }
 
 .noticeBody {
   margin-top: 8px;
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 500;
   color: #4e555e;
   line-height: 1.5;
@@ -245,11 +244,11 @@
   width: 100%;
   height: 54px;
   border: none;
-  border-radius: 8px;
-  background: #59616d;
+  border-radius: 4px;
+  background: #4E555E;
   color: #ffffff;
-  font-size: 16px;
-  font-weight: 700;
+  font-size: 14px;
+  font-weight: 600;
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.14);
   cursor: pointer;
 }
@@ -257,53 +256,4 @@
 .cta:disabled {
   opacity: 0.5;
   cursor: not-allowed;
-}
-
-@media (max-width: 768px) {
-  .topHeader {
-    padding: 0 16px;
-  }
-
-  .logoButton {
-    font-size: 26px;
-  }
-
-  .headerActions {
-    gap: 12px;
-  }
-
-  .top {
-    padding-top: 24px;
-  }
-
-  .heroImg {
-    width: 96px;
-    height: 96px;
-  }
-
-  .title {
-    font-size: 22px;
-  }
-
-  .sub {
-    font-size: 14px;
-  }
-
-  .section,
-  .notice {
-    max-width: 100%;
-  }
-
-  .card {
-    padding: 14px;
-  }
-
-  .bottomBar {
-    width: calc(100% - 24px);
-    bottom: 14px;
-  }
-
-  .cta {
-    height: 52px;
-  }
 }

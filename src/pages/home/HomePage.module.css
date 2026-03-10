@@ -1,13 +1,13 @@
 .container {
   width: 100%;
   min-height: 100dvh;
-  background: #f3f4f7;
+  background: #F7F8FB;
 }
 
 .header {
   width: 100%;
-  height: 72px;
-  background: #58606b;
+  height: 64px;
+  background: #4E555E;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -23,7 +23,7 @@
   cursor: pointer;
 
   color: #ffffff;
-  font-size: 32px;
+  font-size: 24px;
   line-height: 1;
   font-weight: 700;
   letter-spacing: -0.03em;
@@ -34,12 +34,12 @@
 .headerActions {
   display: flex;
   align-items: center;
-  gap: 18px;
+  gap: 24px;
 }
 
 .iconButton {
-  width: 34px;
-  height: 34px;
+  width: 24px;
+  height: 24px;
   border: none;
   background: transparent;
   padding: 0;
@@ -51,8 +51,8 @@
 }
 
 .iconButton img {
-  width: 26px;
-  height: 26px;
+  width: 24px;
+  height: 24px;
   object-fit: contain;
 }
 
@@ -60,17 +60,17 @@
   width: 100%;
   max-width: 620px;
   margin: 0 auto;
-  padding: 54px 20px 80px;
+  padding: 32px 20px 32px;
   box-sizing: border-box;
 }
 
 .title {
-  margin: 0 0 44px;
+  margin: 0 0 32px;
   text-align: center;
   color: #4e555e;
-  font-size: 34px;
+  font-size: 28px;
   line-height: 1.2;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: -0.03em;
   font-family: "AtoZ", system-ui, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR",
     Arial, sans-serif;
@@ -79,18 +79,18 @@
 .noticeCard {
   width: 100%;
   background: #ffffff;
-  border-radius: 18px;
+  border-radius: 8px;
   box-shadow: 0 4px 18px rgba(0, 0, 0, 0.08);
   padding: 18px 22px;
   box-sizing: border-box;
-  margin-bottom: 34px;
+  margin-bottom: 16px;
 }
 
 .noticeTitle {
   color: #4e555e;
   font-size: 16px;
-  line-height: 1.4;
-  font-weight: 700;
+  line-height: 1.5;
+  font-weight: 600;
   margin-bottom: 8px;
   font-family: "AtoZ", system-ui, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR",
     Arial, sans-serif;
@@ -98,11 +98,11 @@
 
 .noticeList {
   margin: 0;
-  padding-left: 18px;
+  padding-left: 24px;
   color: #4e555e;
-  font-size: 15px;
-  line-height: 1.7;
-  font-weight: 500;
+  font-size: 14px;
+  line-height: 1.5;
+  font-weight: 400;
   font-family: "AtoZ", system-ui, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR",
     Arial, sans-serif;
 }
@@ -110,17 +110,17 @@
 .heroCard {
   width: 100%;
   background: #ffffff;
-  border-radius: 20px;
+  border-radius: 8px;
   box-shadow: 0 4px 18px rgba(0, 0, 0, 0.08);
   padding: 18px 22px 20px;
   box-sizing: border-box;
 }
 
 .heroText {
-  color: #111111;
-  font-size: 18px;
+  color: #4E555E;
+  font-size: 16px;
   line-height: 1.4;
-  font-weight: 700;
+  font-weight: 600;
   margin-bottom: 10px;
   font-family: "AtoZ", system-ui, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR",
     Arial, sans-serif;
@@ -129,7 +129,7 @@
 .heroImageWrap {
   width: 100%;
   aspect-ratio: 16 / 9;
-  border-radius: 8px;
+  border-radius: 4px;
   overflow: hidden;
   background: #c7d6e4;
   margin-bottom: 12px;
@@ -146,70 +146,18 @@
   width: 100%;
   height: 58px;
   border: none;
-  border-radius: 8px;
-  background: #58606b;
+  border-radius: 4px;
+  background: #4E555E;
   color: #ffffff;
   cursor: pointer;
 
-  font-size: 18px;
+  font-size: 14px;
   line-height: 1;
-  font-weight: 700;
+  font-weight: 600;
   font-family: "AtoZ", system-ui, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR",
     Arial, sans-serif;
 }
 
 .startButton:hover {
   filter: brightness(0.98);
-}
-
-@media (max-width: 768px) {
-  .header {
-    padding: 0 20px;
-  }
-
-  .logoButton {
-    font-size: 28px;
-  }
-
-  .headerActions {
-    gap: 12px;
-  }
-
-  .iconButton {
-    width: 30px;
-    height: 30px;
-  }
-
-  .iconButton img {
-    width: 22px;
-    height: 22px;
-  }
-
-  .main {
-    max-width: 560px;
-    padding: 42px 16px 56px;
-  }
-
-  .title {
-    font-size: 28px;
-    margin-bottom: 34px;
-  }
-
-  .noticeCard {
-    padding: 16px 18px;
-    margin-bottom: 26px;
-  }
-
-  .heroCard {
-    padding: 16px 18px 18px;
-  }
-
-  .heroText {
-    font-size: 16px;
-  }
-
-  .startButton {
-    height: 54px;
-    font-size: 17px;
-  }
 }
