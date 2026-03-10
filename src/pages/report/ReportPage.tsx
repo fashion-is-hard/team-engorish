@@ -397,7 +397,7 @@ export default function ReportPage() {
     }
   }
 
-  if (loading) return <div className={styles.loading}>불러오는 중…</div>;
+  if (loading) return <div className={styles.loading}>불러오는 중… 시간이 걸릴 수 있어요</div>;
   if (fatal) return <div className={styles.loading}>에러: {fatal}</div>;
 
   if (isB) {

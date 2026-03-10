@@ -174,8 +174,8 @@
   max-width: 640px;
   margin: 0 auto 20px;
   background: #99a9be;
-  border-radius: 10px;
-  padding: 10px;
+  border-radius: 8px;
+  padding: 8px;
   box-sizing: border-box;
   flex-shrink: 0;
 }
@@ -183,20 +183,21 @@
 .goalLabel {
   color: #ffffff;
   font-size: 14px;
-  font-weight: 700;
+  font-weight: 600;
+  margin-left: 8px;
   margin-bottom: 8px;
 }
 
 .goalInner {
   background: #ffffff;
-  border-radius: 8px;
+  border-radius: 4px;
   padding: 2px 14px;
 }
 
 .goalItem {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   min-height: 48px;
 }
 
@@ -205,13 +206,13 @@
 }
 
 .goalIcon {
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   flex-shrink: 0;
 }
 
 .goalText {
-  font-size: 15px;
+  font-size: 12px;
   line-height: 1.45;
   font-weight: 500;
   color: #4e555e;
@@ -283,7 +284,7 @@
 .status {
   margin-bottom: 16px;
   color: #4e555e;
-  font-size: 15px;
+  font-size: 12px;
   text-align: center;
   line-height: 1.45;
 }
