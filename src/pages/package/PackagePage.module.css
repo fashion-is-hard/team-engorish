@@ -1,54 +1,87 @@
 .container {
-  background: #f7f8fb; /* Background */
-  min-height: 100vh;
+  min-height: 100dvh;
+  background: #f3f4f7;
   padding-bottom: 96px;
   color: #4e555e;
   font-family: "AtoZ", system-ui, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR",
     Arial, sans-serif;
 }
 
-/* HEADER */
-.header {
-  height: 56px;
+.topHeader {
+  width: 100%;
+  height: 72px;
+  background: #58606b;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  box-sizing: border-box;
+}
+
+.logoButton {
+  border: none;
+  background: none;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  color: #ffffff;
+  font-size: 28px;
+  line-height: 1;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  font-family: "AtoZ", system-ui, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR",
+    Arial, sans-serif;
+}
+
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.iconButton {
+  width: 30px;
+  height: 30px;
+  border: none;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  position: relative;
-  background: #f7f8fb;
-  border-bottom: 1px solid #dcdddf;
 }
 
-.backBtn {
-  position: absolute;
-  left: 12px;
-  top: 50%;
-  transform: translateY(-50%);
-  border: none;
-  background: transparent;
-  padding: 6px;
-  border-radius: 12px;
-  cursor: pointer;
-}
-.backBtn:hover {
-  background: rgba(220, 221, 223, 0.35);
-}
-.backBtn img {
-  width: 28px;
-  height: 28px;
-  display: block;
+.iconButton img {
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
 }
 
-.headerTitle {
+.pageHeader {
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f3f4f7;
+  border-bottom: 1px solid rgba(78, 85, 94, 0.08);
+}
+
+.pageTitle {
   margin: 0;
-  font-size: 18px;
-  font-weight: 900;
   color: #4e555e;
+  font-size: 20px;
+  line-height: 1.2;
+  font-weight: 700;
+  text-align: center;
+  font-family: "AtoZ", system-ui, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR",
+    Arial, sans-serif;
 }
 
 .body {
-  padding: 16px 20px 0;
-  max-width: 720px;
+  max-width: 760px;
   margin: 0 auto;
+  padding: 10px 20px 0;
+  box-sizing: border-box;
 }
 
 .error {
@@ -61,74 +94,69 @@
   margin-bottom: 12px;
 }
 
-/* LIST (시안처럼 위에서 아래로) */
 .list {
   display: flex;
   flex-direction: column;
   gap: 18px;
 }
 
-/* row: 번호 + 카드 */
 .row {
   display: grid;
-  grid-template-columns: 44px 1fr;
+  grid-template-columns: 40px 1fr;
   align-items: start;
-  gap: 12px;
+  gap: 16px;
 }
 
 .number {
-  width: 34px;
-  height: 34px;
+  width: 22px;
+  height: 22px;
   border-radius: 999px;
+  margin-top: 4px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-weight: 900;
-  font-size: 14px;
+  font-weight: 800;
+  font-size: 12px;
 }
 
 .numberOn {
-  background: #4e555e;
-  color: #ffffff;
-}
-.numberOff {
-  background: #b8bbbf;
+  background: #59616d;
   color: #ffffff;
 }
 
-/* CARD: 시안처럼 "세로" 레이아웃 */
+.numberOff {
+  background: #b8bcc4;
+  color: #ffffff;
+}
+
 .card {
   background: #ffffff;
-  border: 1px solid #dcdddf;
-  border-radius: 16px;
-  padding: 14px;
-  box-shadow: 0 8px 24px rgba(17, 24, 39, 0.06);
-
-  display: flex;
-  flex-direction: column;
+  border: 1px solid #e2e4e8;
+  border-radius: 14px;
+  padding: 12px 16px;
+  box-shadow: 0 3px 14px rgba(17, 24, 39, 0.06);
+  display: grid;
+  grid-template-columns: 88px 1fr;
+  gap: 16px;
   align-items: center;
-  gap: 12px;
-
-  min-height: 150px;
+  min-height: 96px;
 }
 
 .current {
-  border-color: #99a9be;
-  box-shadow: 0 0 0 3px rgba(153, 169, 190, 0.2), 0 8px 24px rgba(17, 24, 39, 0.06);
+  border-color: #d8dde5;
 }
 
 .locked {
-  opacity: 0.45;
-  filter: grayscale(0.2);
+  opacity: 0.55;
 }
 
 .thumbWrap {
-  width: 96px;
-  height: 96px;
-  border-radius: 14px;
+  width: 76px;
+  height: 76px;
+  border-radius: 8px;
   overflow: hidden;
-  border: 1px solid #dcdddf;
-  background: #e9eef6;
+  background: #d6e0ea;
+  flex: 0 0 auto;
 }
 
 .image {
@@ -136,66 +164,132 @@
   height: 100%;
   object-fit: cover;
   display: block;
+  background: #d6e0ea;
 }
 
 .texts {
-  width: 100%;
-  text-align: left;
+  min-width: 0;
+  padding-top: 0;
 }
 
 .title {
   margin: 0;
-  font-size: 18px;
-  font-weight: 900;
+  font-size: 17px;
+  line-height: 1.2;
+  font-weight: 800;
   color: #4e555e;
+  font-family: "AtoZ", system-ui, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR",
+    Arial, sans-serif;
 }
 
 .desc {
-  margin-top: 6px;
-  font-size: 14px;
+  margin: 8px 0 0;
+  font-size: 13px;
+  line-height: 1.4;
   font-weight: 500;
   color: #99a9be;
-  line-height: 1.3;
+  font-family: "AtoZ", system-ui, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR",
+    Arial, sans-serif;
 }
 
-/* Bottom CTA: 시안처럼 넓고 각진 느낌 */
-.cta {
+.bottomBar {
   position: fixed;
-  left: 50%;
-  transform: translateX(-50%);
-  bottom: 18px;
-  width: calc(100% - 40px);
-  max-width: 720px;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 12px 20px 16px;
+  background: linear-gradient(to top, #f3f4f7 78%, rgba(243, 244, 247, 0));
+  box-sizing: border-box;
+}
 
-  height: 56px;
+.cta {
+  display: block;
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+  height: 52px;
   border: none;
-  border-radius: 10px;
-  background: #4e555e;
+  border-radius: 6px;
+  background: #59616d;
   color: #ffffff;
-  font-weight: 900;
+  font-weight: 800;
   font-size: 16px;
-  box-shadow: 0 10px 24px rgba(17, 24, 39, 0.12);
   cursor: pointer;
+  box-shadow: 0 8px 20px rgba(17, 24, 39, 0.1);
 }
 
 .cta:hover {
-  filter: brightness(0.97);
+  filter: brightness(0.98);
 }
+
 .cta:disabled {
   opacity: 0.55;
   cursor: not-allowed;
 }
 
-/* skeleton */
 .skeletonList {
   display: flex;
   flex-direction: column;
   gap: 18px;
 }
+
 .skeletonRow {
-  height: 150px;
-  border-radius: 16px;
+  height: 96px;
+  border-radius: 14px;
   background: #ffffff;
-  border: 1px solid #dcdddf;
-  box-shadow: 0 8px 24px rgba(17, 24, 39, 0.06);
+  border: 1px solid #e2e4e8;
+  box-shadow: 0 3px 14px rgba(17, 24, 39, 0.06);
+}
+
+@media (max-width: 768px) {
+  .topHeader {
+    padding: 0 16px;
+  }
+
+  .logoButton {
+    font-size: 26px;
+  }
+
+  .headerActions {
+    gap: 12px;
+  }
+
+  .body {
+    padding: 10px 16px 0;
+  }
+
+  .row {
+    grid-template-columns: 32px 1fr;
+    gap: 10px;
+  }
+
+  .card {
+    grid-template-columns: 72px 1fr;
+    gap: 12px;
+    padding: 10px 12px;
+    min-height: 84px;
+  }
+
+  .thumbWrap {
+    width: 64px;
+    height: 64px;
+  }
+
+  .title {
+    font-size: 16px;
+  }
+
+  .desc {
+    margin-top: 6px;
+    font-size: 12px;
+    line-height: 1.35;
+  }
+
+  .bottomBar {
+    padding: 10px 16px 14px;
+  }
+
+  .skeletonRow {
+    height: 84px;
+  }
 }

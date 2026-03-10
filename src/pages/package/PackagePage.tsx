@@ -1,4 +1,3 @@
-// src/pages/package/PackagePage.tsx
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
@@ -7,6 +6,7 @@ import styles from "./PackagePage.module.css";
 import { fetchUserProgress } from "@/services/progress";
 
 type VariantPath = "a" | "b";
+
 function getVariantFromPath(pathname: string): VariantPath {
   return pathname.startsWith("/b") ? "b" : "a";
 }
@@ -16,16 +16,13 @@ export default function PackagePage() {
   const location = useLocation();
   const params = useParams();
 
-  // ✅ variant는 params가 아니라 path prefix에서 결정 (라우팅 안정화 핵심)
   const variant = useMemo(() => getVariantFromPath(location.pathname), [location.pathname]);
-  const packageId = (params as any).packageId as string | undefined;
+  const packageId = (params as { packageId?: string }).packageId;
 
   const [pkg, setPkg] = useState<PackageRow | null>(null);
   const [scenarios, setScenarios] = useState<ScenarioRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-
-  // ✅ 진행도
   const [currentIndex, setCurrentIndex] = useState(0);
 
   useEffect(() => {
@@ -40,7 +37,9 @@ export default function PackagePage() {
 
         const { data: pData, error: pErr } = await supabase
           .from("packages")
-          .select("package_id,category_id,title,description,thumb_url,sort_order,is_active,created_at")
+          .select(
+            "package_id,category_id,title,description,thumb_url,sort_order,is_active,created_at"
+          )
           .eq("package_id", packageId)
           .single();
 
@@ -50,7 +49,9 @@ export default function PackagePage() {
 
         const { data: sData, error: sErr } = await supabase
           .from("scenarios")
-          .select("scenario_id,package_id,title,scenario_desc,is_active,sort_order,created_at,thumb_url")
+          .select(
+            "scenario_id,package_id,title,scenario_desc,is_active,sort_order,created_at,thumb_url"
+          )
           .eq("package_id", packageId)
           .eq("is_active", true)
           .order("sort_order", { ascending: true });
@@ -61,9 +62,9 @@ export default function PackagePage() {
         const list = (sData ?? []) as ScenarioRow[];
         setScenarios(list);
 
-        // ✅ 진행도 기반 currentIndex 계산
         const prog = await fetchUserProgress();
         const p = prog.packageProgressMap?.[packageId];
+
         if (p && typeof p.currentIndex === "number") {
           setCurrentIndex(Math.max(0, Math.min(p.currentIndex, Math.max(0, list.length - 1))));
         } else {
@@ -83,25 +84,72 @@ export default function PackagePage() {
     };
   }, [packageId]);
 
-  const currentScenario = useMemo(() => scenarios[currentIndex] ?? null, [scenarios, currentIndex]);
+  const currentScenario = useMemo(() => {
+    return scenarios[currentIndex] ?? null;
+  }, [scenarios, currentIndex]);
 
   function getThumbSrc(fileName?: string | null) {
-    if (fileName && fileName.trim()) return `/${fileName}.png`;
-    return "/scenario.png";
+    if (!fileName || !fileName.trim()) return "/scenario.png";
+    if (fileName.startsWith("http://") || fileName.startsWith("https://") || fileName.startsWith("/")) {
+      return fileName;
+    }
+    return `/${fileName}.png`;
+  }
+
+  function goHome() {
+    navigate(`/${variant}/home`);
+  }
+
+  function goReport() {
+    navigate(`/${variant}/report`);
+  }
+
+  function handleLogout() {
+    navigate("/auth/login");
+  }
+
+  function openCurrentScenario() {
+    if (!currentScenario) return;
+    navigate(`/${variant}/scenarios/${currentScenario.scenario_id}`);
   }
 
   return (
     <div className={styles.container}>
-      {/* Header */}
-      <div className={styles.header}>
-        {/* ✅ categories는 이제 안 쓰니까 home으로 */}
-        <button className={styles.backBtn} type="button" onClick={() => navigate(`/${variant}/home`)}>
-          <img src="/back.svg" alt="뒤로가기" />
+      <header className={styles.topHeader}>
+        <button type="button" className={styles.logoButton} onClick={goHome}>
+          Engorish
         </button>
-        <h1 className={styles.headerTitle}>{pkg?.title ?? "패키지"}</h1>
+
+        <div className={styles.headerActions}>
+          <button type="button" className={styles.iconButton} onClick={goHome} aria-label="home">
+            <img src="/home.svg" alt="" />
+          </button>
+
+          <button
+            type="button"
+            className={styles.iconButton}
+            onClick={goReport}
+            aria-label="report"
+          >
+            <img src="/report.svg" alt="" />
+          </button>
+
+          <button
+            type="button"
+            className={styles.iconButton}
+            onClick={handleLogout}
+            aria-label="logout"
+          >
+            <img src="/out.svg" alt="" />
+          </button>
+        </div>
+      </header>
+
+      <div className={styles.pageHeader}>
+        <h1 className={styles.pageTitle}>{pkg?.title ?? "패키지"}</h1>
       </div>
 
-      <div className={styles.body}>
+      <main className={styles.body}>
         {error ? <div className={styles.error}>에러: {error}</div> : null}
 
         {loading ? (
@@ -113,19 +161,29 @@ export default function PackagePage() {
         ) : (
           <div className={styles.list}>
             {scenarios.map((s, index) => {
-              const unlocked = index <= currentIndex; // 완료 + 현재
-              const locked = index > currentIndex; // 잠김
+              const unlocked = index <= currentIndex;
+              const locked = index > currentIndex;
               const isCurrent = index === currentIndex;
 
               return (
                 <div key={s.scenario_id} className={styles.row}>
-                  <div className={`${styles.number} ${unlocked ? styles.numberOn : styles.numberOff}`}>
+                  <div
+                    className={`${styles.number} ${
+                      unlocked ? styles.numberOn : styles.numberOff
+                    }`}
+                  >
                     {index + 1}
                   </div>
 
-                  {/* ✅ 카드 클릭 없음(상호작용 X) */}
-                  <div className={`${styles.card} ${locked ? styles.locked : ""} ${isCurrent ? styles.current : ""}`}>
-                    <img src={getThumbSrc(s.thumb_url)} className={styles.image} alt={s.title} />
+                  <div
+                    className={`${styles.card} ${locked ? styles.locked : ""} ${
+                      isCurrent ? styles.current : ""
+                    }`}
+                  >
+                    <div className={styles.thumbWrap}>
+                      <img src={getThumbSrc(s.thumb_url)} className={styles.image} alt={s.title} />
+                    </div>
+
                     <div className={styles.texts}>
                       <p className={styles.title}>{s.title}</p>
                       <p className={styles.desc}>{s.scenario_desc ?? ""}</p>
@@ -136,20 +194,18 @@ export default function PackagePage() {
             })}
           </div>
         )}
-      </div>
+      </main>
 
-      {/* Bottom CTA: 다음 시나리오 디테일로 */}
-      <button
-        className={styles.cta}
-        disabled={!currentScenario}
-        type="button"
-        onClick={() => {
-          if (!currentScenario) return;
-          navigate(`/${variant}/scenarios/${currentScenario.scenario_id}`);
-        }}
-      >
-        시작하기
-      </button>
+      <div className={styles.bottomBar}>
+        <button
+          className={styles.cta}
+          disabled={!currentScenario}
+          type="button"
+          onClick={openCurrentScenario}
+        >
+          시작하기
+        </button>
+      </div>
     </div>
   );
 }

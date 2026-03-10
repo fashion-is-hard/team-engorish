@@ -25,7 +25,6 @@ type ScenarioRow = {
   first_chat: string | null;
 };
 
-
 type SpeechRecognitionCtor = new () => SpeechRecognition;
 
 declare global {
@@ -114,10 +113,25 @@ export default function PlayPage() {
   const messagesRef = useRef<ChatItem[]>([]);
   const startedAtRef = useRef<number>(Date.now());
   const timerRef = useRef<number | null>(null);
+  const chatAreaRef = useRef<HTMLDivElement | null>(null);
+  const bottomAnchorRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     messagesRef.current = messages;
   }, [messages]);
+
+  useEffect(() => {
+    const el = chatAreaRef.current;
+    const anchor = bottomAnchorRef.current;
+
+    if (!el) return;
+
+    if (anchor) {
+      anchor.scrollIntoView({ behavior: "smooth", block: "end" });
+    } else {
+      el.scrollTop = el.scrollHeight;
+    }
+  }, [messages, liveTranscript, status]);
 
   useEffect(() => {
     void init();
@@ -282,10 +296,7 @@ export default function PlayPage() {
     endReason: string;
     isSuccess: boolean;
   }) {
-    const durationSec = Math.max(
-      0,
-      Math.round((Date.now() - startedAtRef.current) / 1000)
-    );
+    const durationSec = Math.max(0, Math.round((Date.now() - startedAtRef.current) / 1000));
 
     const { error } = await supabase
       .from("roleplay_sessions")
@@ -328,13 +339,13 @@ export default function PlayPage() {
 
       const scenarioId = session.scenario_id;
 
-      const scenarioSelect = isA
-        ? "scenario_id, title, scenario_desc, first_chat"
-        : "scenario_id, title, scenario_desc, first_chat";
-
       const [{ data: scenario, error: scenarioError }, { data: goalData }, { data: npcData }] =
         await Promise.all([
-          supabase.from("scenarios").select(scenarioSelect).eq("scenario_id", scenarioId).single(),
+          supabase
+            .from("scenarios")
+            .select("scenario_id, title, scenario_desc, first_chat")
+            .eq("scenario_id", scenarioId)
+            .single(),
           supabase
             .from("scenario_goals")
             .select("goal_id, goal_title, goal_definition")
@@ -798,15 +809,25 @@ export default function PlayPage() {
     }
   }
 
+  function goHome() {
+    navigate(`${basePath}/home`);
+  }
+
+  function goReport() {
+    navigate(`${basePath}/report`);
+  }
+
+  function handleLogout() {
+    navigate("/auth/login");
+  }
+
   return (
     <div className={styles.container}>
       {startModalOpen && (
         <div className={styles.modalOverlay}>
           <div className={styles.modalCard}>
             <div className={styles.modalTitle}>대화가 곧 시작됩니다.</div>
-            <div className={styles.modalText}>
-              스피커와 마이크 연결을 확인해주세요.
-            </div>
+            <div className={styles.modalText}>스피커와 마이크 연결을 확인해주세요.</div>
             <button
               className={styles.modalButton}
               type="button"
@@ -819,16 +840,41 @@ export default function PlayPage() {
         </div>
       )}
 
-      {isA ? (
-        <>
-          <div className={styles.playHeaderA}>
-            <div className={styles.playTitle}>{scenarioTitle || "시나리오 명"}</div>
-            <div className={styles.playTimer}>{mmss(elapsedSec)}</div>
-            <button className={styles.playClose} onClick={handleExit} type="button">
-              ✕
-            </button>
-          </div>
+      <header className={styles.topHeader}>
+        <button type="button" className={styles.logoButton} onClick={goHome}>
+          Engorish
+        </button>
 
+        <div className={styles.headerActions}>
+          <button type="button" className={styles.iconButton} onClick={goHome} aria-label="home">
+            <img src="/home.svg" alt="" />
+          </button>
+
+          <button type="button" className={styles.iconButton} onClick={goReport} aria-label="report">
+            <img src="/report.svg" alt="" />
+          </button>
+
+          <button type="button" className={styles.iconButton} onClick={handleLogout} aria-label="logout">
+            <img src="/out.svg" alt="" />
+          </button>
+        </div>
+      </header>
+
+      <div className={styles.sessionHeader}>
+        <div className={styles.sessionHeaderInner}>
+          <div className={styles.sessionTitle}>{scenarioTitle || "시나리오 명"}</div>
+          <div className={styles.sessionTimer}>{mmss(elapsedSec)}</div>
+          <button
+            className={styles.closeButton}
+            onClick={handleExit}
+            type="button"
+            aria-label="close"
+          >
+            ✕
+          </button>
+        </div>
+
+        {isA ? (
           <div className={styles.progressWrap}>
             <div className={styles.progressBar}>
               <div className={styles.progressFill} style={{ width: `${aProgressPercent}%` }} />
@@ -837,59 +883,64 @@ export default function PlayPage() {
               {pad2(aProgressCount)}/{A_TURN_LIMIT}
             </div>
           </div>
+        ) : null}
+      </div>
 
-          <div className={styles.scenarioCard}>
-            <div className={styles.scenarioCardTitle}>시나리오 설명</div>
-            <div className={styles.scenarioCardBody}>{scenarioDesc || "설명 문장"}</div>
+      <main className={styles.main}>
+        {isA ? (
+          <div className={styles.descCard}>
+            <div className={styles.descTitle}>시나리오 설명</div>
+            <div className={styles.descBody}>{scenarioDesc || "설명 문장"}</div>
           </div>
-        </>
-      ) : (
-        <>
-          <header className={styles.header}>
-            <div>{scenarioTitle}</div>
-            <button className={styles.playCloseB} onClick={handleExit} type="button">
-              ✕
-            </button>
-          </header>
-
+        ) : (
           <div className={styles.goalCard}>
-            {goals.map((g) => (
-              <div key={g.goal_id}>
-                {g.achieved ? "✅" : "⬜"} {g.goal_title}
-              </div>
-            ))}
-          </div>
-        </>
-      )}
-
-      <div className={styles.chatArea}>
-        {messages.map((m) => (
-          <div key={m.id} className={m.role === "assistant" ? styles.left : styles.right}>
-            <div
-              className={`${styles.bubble} ${
-                m.role === "assistant" ? styles.assistantBubble : styles.userBubble
-              }`}
-            >
-              {m.text}
-            </div>
-          </div>
-        ))}
-
-        {status === "recording" && liveTranscript && (
-          <div className={styles.right}>
-            <div className={`${styles.bubble} ${styles.userBubble} ${styles.liveBubble}`}>
-              {liveTranscript}
+            <div className={styles.goalLabel}>목표</div>
+            <div className={styles.goalInner}>
+              {goals.map((g) => (
+                <div key={g.goal_id} className={styles.goalItem}>
+                  <img
+                    src={g.achieved ? "/check_act.svg" : "/check_dis.svg"}
+                    className={styles.goalIcon}
+                    alt=""
+                  />
+                  <span className={styles.goalText}>{g.goal_title}</span>
+                </div>
+              ))}
             </div>
           </div>
         )}
-      </div>
+
+        <div className={styles.chatArea} ref={chatAreaRef}>
+          {messages.map((m) => (
+            <div key={m.id} className={m.role === "assistant" ? styles.left : styles.right}>
+              <div
+                className={`${styles.bubble} ${
+                  m.role === "assistant" ? styles.assistantBubble : styles.userBubble
+                }`}
+              >
+                {m.text}
+              </div>
+            </div>
+          ))}
+
+          {status === "recording" && liveTranscript && (
+            <div className={styles.right}>
+              <div className={`${styles.bubble} ${styles.userBubble} ${styles.liveBubble}`}>
+                {liveTranscript}
+              </div>
+            </div>
+          )}
+
+          <div ref={bottomAnchorRef} />
+        </div>
+      </main>
 
       <div className={styles.bottom}>
         <div className={styles.status}>
           {startModalOpen
             ? "확인 버튼을 누르면 대화가 시작됩니다."
             : status === "recording"
-            ? "듣고 있어요. 말하는 내용이 실시간으로 표시됩니다."
+            ? "듣고 있어요."
             : status === "thinking"
             ? "응답을 기다리고 있어요"
             : status === "ai-speaking"
@@ -906,7 +957,11 @@ export default function PlayPage() {
           disabled={startModalOpen || status === "thinking" || status === "ai-speaking"}
           type="button"
         >
-          🎤
+          <img
+            src={status === "recording" ? "/record.svg" : "/speak.svg"}
+            alt=""
+            className={styles.micIcon}
+          />
         </button>
       </div>
     </div>

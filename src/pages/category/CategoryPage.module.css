@@ -1,190 +1,251 @@
 .container {
-  background: #f7f8fb; /* Background */
-  min-height: 100vh;
+  width: 100%;
+  min-height: 100dvh;
+  background: #f3f4f7;
+}
+
+.header {
+  width: 100%;
+  height: 72px;
+  background: #58606b;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 28px;
+  box-sizing: border-box;
+}
+
+.logoButton {
+  border: none;
+  background: none;
   padding: 0;
-  color: #4e555e;
+  margin: 0;
+  cursor: pointer;
+  color: #ffffff;
+  font-size: 32px;
+  line-height: 1;
+  font-weight: 700;
+  letter-spacing: -0.03em;
   font-family: "AtoZ", system-ui, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR",
     Arial, sans-serif;
 }
 
-/* HEADER */
-.header {
-  height: 56px;
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.iconButton {
+  width: 34px;
+  height: 34px;
+  border: none;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  position: relative;
-  background: #f7f8fb;
-  border-bottom: 1px solid #dcdddf;
 }
 
-.backBtn {
-  position: absolute;
-  left: 12px;
-  top: 50%;
-  transform: translateY(-50%);
-  border: none;
-  background: transparent;
-  padding: 6px;
-  border-radius: 12px;
-  cursor: pointer;
+.iconButton img {
+  width: 26px;
+  height: 26px;
+  object-fit: contain;
 }
 
-.backBtn:hover {
-  background: rgba(220, 221, 223, 0.35);
+.main {
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 18px 20px 56px;
+  box-sizing: border-box;
 }
 
-.backBtn img {
-  width: 28px;
-  height: 28px;
-  display: block;
-}
-
-.headerTitle {
+.title {
   margin: 0;
-  font-size: 18px;
-  font-weight: 800;
+  text-align: center;
   color: #4e555e;
+  font-size: 28px;
+  line-height: 1.25;
+  font-weight: 700;
+  font-family: "AtoZ", system-ui, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR",
+    Arial, sans-serif;
 }
 
-/* TITLE */
-.sectionTitle {
-  margin: 14px 20px 10px 20px;
-  font-size: 22px;
-  font-weight: 900;
-  color: #4e555e;
-}
-
-/* TABS */
-.tabs {
-  margin: 0 20px 14px 20px;
+.tabRow {
+  margin-top: 18px;
   display: flex;
-  gap: 8px;
+  justify-content: center;
+  gap: 12px;
   flex-wrap: wrap;
+  padding-bottom: 14px;
+  border-bottom: 1px solid rgba(78, 85, 94, 0.08);
 }
 
-.tab {
-  height: 32px;
+.tabButton {
+  min-width: 52px;
+  height: 26px;
   padding: 0 12px;
-  border-radius: 10px;
-  border: 1px solid #dcdddf;
-  background: #ffffff;
-  font-size: 13px;
-  font-weight: 800;
-  color: #b8bbbf; /* Primary Medium */
+  border-radius: 8px;
+  border: 1px solid #d7dbe1;
+  background: #f3f4f7;
+  color: #b1b6be;
+  font-size: 12px;
+  font-weight: 600;
   cursor: pointer;
+  font-family: "AtoZ", system-ui, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR",
+    Arial, sans-serif;
 }
 
-.tabActive {
-  background: #99a9be; /* Secondary High */
+.tabButtonActive {
+  background: #99a9be;
+  border-color: #99a9be;
   color: #ffffff;
-  border-color: transparent;
 }
 
-/* helper/error */
-.helper {
-  margin: 0 20px 10px 20px;
-  color: #6b7280;
-  font-size: 13px;
-}
-.error {
-  margin: 0 20px 10px 20px;
-  color: #ff8f8f;
-  font-size: 13px;
-}
-
-/* GRID */
 .grid {
-  margin: 0 20px 28px 20px;
+  margin-top: 14px;
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px 18px;
 }
 
-/* CARD (button) */
 .card {
-  text-align: left;
+  border: none;
   background: #ffffff;
-  border: 1px solid #dcdddf;
-  border-radius: 16px;
-  padding: 12px;
-  box-shadow: 0 8px 24px rgba(17, 24, 39, 0.06);
+  border-radius: 14px;
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.08);
+  padding: 14px;
+  text-align: left;
   cursor: pointer;
+  box-sizing: border-box;
 }
 
-.card:hover {
-  filter: brightness(0.99);
-}
-
-.image {
+.cardImageWrap {
   width: 100%;
   aspect-ratio: 1 / 1;
-  object-fit: cover;
-  border-radius: 14px;
-  display: block;
-  background: #e9eef6;
-  border: 1px solid #dcdddf;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #c8d5e3;
 }
 
-/* badge base */
+.cardImage {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  background: #c8d5e3;
+}
+
+.cardBody {
+  padding-top: 12px;
+}
+
 .badge {
   display: inline-flex;
   align-items: center;
-  height: 22px;
-  margin-top: 10px;
-  padding: 0 10px;
+  justify-content: center;
+  min-width: 42px;
+  height: 18px;
+  padding: 0 8px;
   border-radius: 999px;
-  font-size: 12px;
-  font-weight: 900;
-  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+  margin-bottom: 8px;
+  font-family: "AtoZ", system-ui, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR",
+    Arial, sans-serif;
 }
 
-/* 상태별 뱃지 컬러(디자인 시스템) */
-.badgeNotStarted {
-  background: #dcdddf; /* Primary Low */
-  color: #4e555e;
+.badgeComplete {
+  background: #59616d;
+  color: #ffffff;
 }
 
 .badgeProgress {
-  background: #99a9be; /* Secondary High */
+  background: #99a9be;
   color: #ffffff;
 }
 
-.badgeDone {
-  background: #4e555e; /* Primary */
-  color: #ffffff;
+.badgeNotStarted {
+  background: #d8dde5;
+  color: #7f8894;
 }
 
-.name {
-  margin: 10px 0 0 0;
-  font-size: 16px;
-  font-weight: 900;
+.cardTitle {
   color: #4e555e;
+  font-size: 16px;
+  line-height: 1.35;
+  font-weight: 700;
+  font-family: "AtoZ", system-ui, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR",
+    Arial, sans-serif;
 }
 
-/* skeleton */
-.skeletonCard {
-  height: 230px;
-  border-radius: 16px;
-  background: #ffffff;
-  border: 1px solid #dcdddf;
-  box-shadow: 0 8px 24px rgba(17, 24, 39, 0.06);
+.cardMeta {
+  margin-top: 4px;
+  color: #99a9be;
+  font-size: 12px;
+  line-height: 1.3;
+  font-weight: 600;
+  font-family: "AtoZ", system-ui, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR",
+    Arial, sans-serif;
 }
 
-/* 기존 badge 기본 유지 */
-.badge{
-  display:inline-flex;
-  align-items:center;
-  height:20px;
-  margin-top:10px;
-  padding:0 10px;
-  border-radius:999px;
-  font-size:12px;
-  font-weight:700;
-  color:#FFFFFF;
+.loading {
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f3f4f7;
+  color: #4e555e;
+  font-size: 16px;
+  font-weight: 600;
 }
 
-/* ✅ 상태별 색 */
-.badgeClear{ background:#4E555E; }      /* 진한 회색 */
-.badgeProgress{ background:#99A9BE; }   /* 브랜드(Secondary High) */
-.badgeNotStarted{ background:#CFCFCF; } /* 연회색 */
+@media (max-width: 768px) {
+  .header {
+    padding: 0 20px;
+  }
+
+  .logoButton {
+    font-size: 28px;
+  }
+
+  .headerActions {
+    gap: 12px;
+  }
+
+  .iconButton {
+    width: 30px;
+    height: 30px;
+  }
+
+  .iconButton img {
+    width: 22px;
+    height: 22px;
+  }
+
+  .main {
+    max-width: 620px;
+    padding: 16px 16px 40px;
+  }
+
+  .title {
+    font-size: 24px;
+  }
+
+  .tabRow {
+    gap: 8px;
+  }
+
+  .grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+  }
+}
+
+@media (max-width: 560px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}
