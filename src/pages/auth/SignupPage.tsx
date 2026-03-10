@@ -146,7 +146,7 @@ export default function SignupPage() {
         })
       );
 
-      alert("회원가입이 완료되었습니다. 로그인 후 정보가 최종 저장됩니다.");
+      alert("회원가입이 완료되었습니다.");
       navigate("/auth/login", { replace: true });
     } catch (err) {
       console.error(err);

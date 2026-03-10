@@ -17,6 +17,8 @@ import ScenarioDetailPage from "@/pages/scenario/ScenarioDetailPage";
 import PlayPage from "@/pages/play/PlayPage";
 import ResultPage from "@/pages/result/ResultPage";
 import ReportPage from "@/pages/report/ReportPage";
+import ResetPasswordPage from "@/pages/auth/ResetPasswordPage";
+import UpdatePasswordPage from "@/pages/auth/UpdatePasswordPage";
 
 function RequireAuth() {
   return <Outlet />;
@@ -44,6 +46,8 @@ export const router = createBrowserRouter([
 
       { path: "/auth/login", element: <LoginPage /> },
       { path: "/auth/signup", element: <SignupPage /> },
+      { path: "/auth/reset-password", element: <ResetPasswordPage /> },
+      { path: "/auth/update-password", element: <UpdatePasswordPage /> },
       { path: "/privacy", element: <PrivacyPage /> },
 
       {
