@@ -133,24 +133,24 @@
   align-items: center;
   width: fit-content;
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 600;
   padding: 6px 10px;
   border-radius: 10px;
 }
 
 .insightBadgeGreen {
-  color: #57b876;
+  color: #7DCA9B;
   background: #edf8f1;
 }
 
 .insightBadgeRed {
-  color: #e07a7a;
+  color: #FF8F8F;
   background: #fceeee;
 }
 
 .insightText {
   font-size: 14px;
-  font-weight: 700;
+  font-weight: 500;
   color: #2b2b2b;
   line-height: 1.4;
 }
@@ -159,7 +159,7 @@
   margin: 0;
   padding-left: 18px;
   color: #4e555e;
-  font-size: 13px;
+  font-size: 12px;
   line-height: 1.45;
 }
 
@@ -198,21 +198,21 @@
 .barLabel {
   width: 18px;
   font-size: 15px;
-  font-weight: 800;
-  color: #4e555e;
+  font-weight: 600;
+  color: #4E555E;
 }
 
 .barTrack {
   flex: 1;
   height: 20px;
-  background: #ecf0f5;
+  background: #C2CBD8;
   border-radius: 999px;
   overflow: hidden;
 }
 
 .barFill {
   height: 100%;
-  background: #b8c3d3;
+  background: #99A9BE;
   border-radius: 999px;
 }
 
@@ -232,7 +232,7 @@
 .miniTitle {
   font-size: 14px;
   font-weight: 500;
-  color: #2b2b2b;
+  color: #4E555E;
 }
 
 .miniSvg {

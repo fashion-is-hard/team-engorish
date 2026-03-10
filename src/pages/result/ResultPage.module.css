@@ -180,29 +180,29 @@
   width: 100%;
   max-width: 640px;
   background: #99a9be;
-  border-radius: 12px;
+  border-radius: 8px;
   padding: 12px;
   margin-top: 6px;
 }
 
 .goalHeader {
   color: #ffffff;
-  font-size: 20px;
-  font-weight: 800;
+  font-size: 18px;
+  font-weight: 600;
   text-align: center;
   margin-bottom: 10px;
 }
 
 .goalBox {
   background: #ffffff;
-  border-radius: 8px;
+  border-radius: 4px;
   padding: 10px 14px;
 }
 
 .goalItem {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   min-height: 34px;
 }
 
@@ -213,7 +213,7 @@
 }
 
 .goalText {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 500;
   color: #4e555e;
   line-height: 1.45;
@@ -223,7 +223,7 @@
 .insightCardLight {
   width: 100%;
   max-width: 640px;
-  border-radius: 12px;
+  border-radius: 8px;
   padding: 14px 16px;
   box-sizing: border-box;
 }
@@ -236,13 +236,13 @@
 
 .insightCardLight {
   margin-top: 12px;
-  background: #c8d1db;
-  color: #2b2b2b;
+  background: #C2CBD8;
+  color: #4e555e;
 }
 
 .insightTitle {
-  font-size: 16px;
-  font-weight: 800;
+  font-size: 14px;
+  font-weight: 600;
   margin-bottom: 8px;
 }
 
@@ -259,8 +259,8 @@
   max-width: 640px;
   text-align: center;
   margin-top: 44px;
-  color: #2b2b2b;
-  font-weight: 700;
+  color: #4e555e;
+  font-weight: 600;
   font-size: 16px;
   line-height: 1.5;
 }

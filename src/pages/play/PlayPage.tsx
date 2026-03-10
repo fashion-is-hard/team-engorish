@@ -894,7 +894,7 @@ export default function PlayPage() {
           </div>
         ) : (
           <div className={styles.goalCard}>
-            <div className={styles.goalLabel}>목표</div>
+            <div className={styles.goalLabel}>대화 목표</div>
             <div className={styles.goalInner}>
               {goals.map((g) => (
                 <div key={g.goal_id} className={styles.goalItem}>
