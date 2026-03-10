@@ -73,16 +73,11 @@ async function applyPendingSignupProfile(userId: string, userEmail?: string | nu
     exchange_stage: pending.exchange_stage ?? null,
   };
 
-  console.log("profiles update payload:", payload);
-  console.log("profiles update userId:", userId);
-
   const result = await supabase
     .from("profiles")
     .update(payload)
     .eq("id", userId)
     .select();
-
-  console.log("profiles update full result:", result);
 
   if (result.error) {
     throw new Error(
@@ -162,7 +157,7 @@ export default function LoginPage() {
         await applyPendingSignupProfile(data.user.id, data.user.email);
       } catch (profileError) {
         console.error("profiles update after login error:", profileError);
-        setFormError("로그인은 되었지만 추가 정보 저장에 실패했습니다. 다시 로그인해 주세요.");
+        setFormError("문제가 발생했습니다. 다시 로그인해 주세요.");
         return;
       }
 
@@ -231,15 +226,28 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <div className={styles.signup}>
-          <span className={styles.signupText}>잉고리쉬가 처음이신가요?</span>
-          <button
+        <div className={styles.linkGroup}>
+          <div className={styles.signup}>
+            <span className={styles.signupText}>잉고리쉬가 처음이신가요?</span>
+            <button
+              className={styles.signupBtn}
+              type="button"
+              onClick={() => navigate("/auth/signup")}
+            >
+              회원가입
+            </button>
+          </div>
+
+          <div className={styles.signup}>
+            <span className={styles.signupText}>비밀번호를 잊으셨나요?</span>
+            <button
             className={styles.signupBtn}
             type="button"
-            onClick={() => navigate("/auth/signup")}
+            onClick={() => navigate("/auth/reset-password")}
           >
-            회원가입
+            비밀번호 재설정
           </button>
+          </div>
         </div>
       </main>
     </div>
