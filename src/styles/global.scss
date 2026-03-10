@@ -1,55 +1,486 @@
-/* ✅ 전역(추천): src/index.css (또는 styles/global.css)
-   - 모바일에서 "너무 찌그러짐" 방지: 안전한 폭 + 가운데 정렬 + 적절한 패딩
-   - 데스크탑에서도 폼이 과하게 늘어나지 않게 max-width 제한
+/* src/styles/global.scss */
+/* PC 웹 실험용 글로벌 스타일
+   - 전체 앱을 가운데 정렬
+   - 과하게 넓어지지 않도록 최대 너비 제한
+   - 폰트/간격을 웹 기준으로 재조정
+   - 각 페이지는 .page 클래스를 붙여 공통 폭/패딩 사용
 */
 
-:root{
-  --app-max: 430px;      /* iPhone Pro Max 정도 */
-  --app-pad: 18px;
+/* =========================
+   1) Design Tokens
+========================= */
+:root {
+  --bg: #f4f4f4;
+  --surface: #ffffff;
+  --text: #4e555e;
+  --text-muted: #7f8791;
+  --line: #dcdedf;
+  --brand-dark: #5b636e;
+  --brand-soft: #c2cbd8;
+  --brand-tint: #99a9be;
+
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 18px;
+
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.06);
+
+  --app-max: 1280px;
+  --content-max: 1120px;
+  --narrow-max: 520px;
+
+  --page-pad-x: 32px;
+  --page-pad-y: 28px;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 32px;
+  --space-8: 40px;
+  --space-9: 48px;
+
+  --font-display: 32px;
+  --font-h1: 28px;
+  --font-h2: 24px;
+  --font-h3: 20px;
+  --font-body: 16px;
+  --font-meta: 14px;
+  --font-caption: 12px;
+
+  --lh-tight: 1.3;
+  --lh-normal: 1.5;
+  --lh-loose: 1.6;
 }
 
-/* iOS 입력 확대/레이아웃 깨짐 방지 */
-input, button, textarea, select{
-  font-size: 16px;
-}
-
-/* 화면 전체 베이스 */
-html, body{
-  height: 100%;
-}
-
-body{
-  margin: 0;
-  background: #F4F4F4;
-}
-
-/* Vite/React 루트 */
-#root{
-  min-height: 100dvh;
-  display: flex;
-  justify-content: center; /* 가운데 정렬 */
-  background: #F4F4F4;
-}
-
-/* 앱 "폰 프레임"처럼 동작하는 컨테이너
-   - 너 페이지들이 width:100%를 쓰더라도 여기 안에서만 100%가 됨 */
-.appShell{
-  width: 100%;
-  max-width: var(--app-max);
-  min-height: 100dvh;
-  background: #F4F4F4;
-}
-
-/* 각 페이지 최상단 container에 이 클래스를 같이 붙이면 제일 깔끔함
-   (예: <div className={`${styles.container} page`}> ) */
-.page{
-  width: 100%;
-  padding-left: var(--app-pad);
-  padding-right: var(--app-pad);
+/* =========================
+   2) Reset
+========================= */
+*,
+*::before,
+*::after {
   box-sizing: border-box;
 }
 
-/* 아주 좁은 화면(320px)에서 패딩 살짝 줄이기 */
-@media (max-width: 360px){
-  :root{ --app-pad: 14px; }
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family:
+    "Pretendard",
+    "SUIT",
+    "Inter",
+    "Apple SD Gothic Neo",
+    "Noto Sans KR",
+    "Segoe UI",
+    sans-serif;
+  font-size: var(--font-body);
+  line-height: var(--lh-normal);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* form control 기본 폰트 통일 */
+input,
+button,
+textarea,
+select {
+  font: inherit;
+}
+
+/* 링크/버튼 기본 */
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button {
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+img,
+svg,
+video,
+canvas {
+  display: block;
+  max-width: 100%;
+}
+
+ul,
+ol,
+p,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  margin: 0;
+}
+
+/* =========================
+   3) Root App Layout
+========================= */
+#root {
+  min-height: 100dvh;
+  background: var(--bg);
+}
+
+/* 모바일 폰 프레임 느낌 제거하고
+   웹 화면에서 넓게 사용하되 너무 퍼지지 않게 */
+.appShell {
+  width: 100%;
+  min-height: 100dvh;
+  background: var(--bg);
+}
+
+/* 각 페이지의 최상단 wrapper에 함께 붙이는 공통 클래스
+   예: <div className={`${styles.container} page`}> */
+.page {
+  width: 100%;
+  max-width: var(--content-max);
+  margin: 0 auto;
+  padding: var(--page-pad-y) var(--page-pad-x);
+}
+
+/* 로그인/약관 등 좁은 폼 페이지용 */
+.page--narrow {
+  width: 100%;
+  max-width: var(--narrow-max);
+  margin: 0 auto;
+  padding: 56px var(--page-pad-x);
+}
+
+/* 카드형 메인 컨텐츠 wrapper가 필요할 때 사용 */
+.surface {
+  background: var(--surface);
+  border: 1px solid rgba(0, 0, 0, 0.04);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+/* =========================
+   4) Common Typography
+========================= */
+.h1,
+.pageTitle {
+  font-size: var(--font-h1);
+  line-height: var(--lh-tight);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.h2,
+.sectionTitle {
+  font-size: var(--font-h2);
+  line-height: var(--lh-tight);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.h3,
+.blockTitle {
+  font-size: var(--font-h3);
+  line-height: var(--lh-tight);
+  font-weight: 700;
+}
+
+.body,
+.text {
+  font-size: var(--font-body);
+  line-height: var(--lh-loose);
+  font-weight: 400;
+}
+
+.meta {
+  font-size: var(--font-meta);
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+
+.caption {
+  font-size: var(--font-caption);
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+
+/* =========================
+   5) Header / Section helpers
+========================= */
+.webHeader {
+  width: 100%;
+  background: var(--brand-dark);
+  color: #fff;
+}
+
+.webHeader__inner {
+  width: 100%;
+  max-width: var(--app-max);
+  height: 72px;
+  margin: 0 auto;
+  padding: 0 var(--page-pad-x);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.webHeader__title {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.sectionHeader {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.sectionBody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+/* =========================
+   6) Grid helpers
+========================= */
+.grid2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+}
+
+.grid3 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 24px;
+}
+
+.grid4 {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 24px;
+}
+
+/* 카드 리스트가 많은 페이지에서 쓰기 좋은 기본 카드 */
+.card {
+  background: var(--surface);
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+.card__body {
+  padding: 14px;
+}
+
+/* =========================
+   7) Form defaults
+========================= */
+.formStack {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.field {
+  width: 100%;
+}
+
+.input,
+.textarea,
+.select {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--text);
+  padding: 13px 14px;
+  outline: none;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    background-color 0.15s ease;
+}
+
+.input::placeholder,
+.textarea::placeholder {
+  color: #a3aab3;
+}
+
+.input:focus,
+.textarea:focus,
+.select:focus {
+  border-color: var(--brand-tint);
+  box-shadow: 0 0 0 4px rgba(153, 169, 190, 0.15);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  padding: 0 18px;
+  border-radius: 10px;
+  font-size: var(--font-meta);
+  font-weight: 600;
+  transition:
+    transform 0.08s ease,
+    opacity 0.15s ease,
+    background-color 0.15s ease;
+}
+
+.btn:active {
+  transform: translateY(1px);
+}
+
+.btnPrimary {
+  background: var(--brand-dark);
+  color: #fff;
+}
+
+.btnPrimary:hover {
+  opacity: 0.92;
+}
+
+.btnSecondary {
+  background: #eef1f4;
+  color: var(--text);
+}
+
+.btnGhost {
+  background: transparent;
+  color: var(--text);
+}
+
+/* =========================
+   8) Utility
+========================= */
+.center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.stack-8 {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.stack-12 {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.stack-16 {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.stack-24 {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.stack-32 {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+/* =========================
+   9) Responsive
+========================= */
+@media (max-width: 1024px) {
+  :root {
+    --content-max: 960px;
+    --page-pad-x: 24px;
+    --page-pad-y: 24px;
+  }
+
+  .grid4 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  :root {
+    --font-display: 28px;
+    --font-h1: 24px;
+    --font-h2: 22px;
+    --font-h3: 18px;
+    --font-body: 16px;
+    --font-meta: 14px;
+    --font-caption: 12px;
+
+    --page-pad-x: 18px;
+    --page-pad-y: 20px;
+  }
+
+  .page,
+  .page--narrow {
+    max-width: 100%;
+  }
+
+  .webHeader__inner {
+    height: 64px;
+    padding: 0 18px;
+  }
+
+  .webHeader__title {
+    font-size: 22px;
+  }
+
+  .grid2,
+  .grid3,
+  .grid4 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  :root {
+    --page-pad-x: 14px;
+    --page-pad-y: 16px;
+  }
+
+  .grid2,
+  .grid3,
+  .grid4 {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  .page--narrow {
+    padding-top: 32px;
+  }
 }

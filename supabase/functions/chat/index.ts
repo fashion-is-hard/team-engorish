@@ -3,6 +3,11 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+type ChatHistoryItem = {
+  role: "assistant" | "user";
+  text: string;
+};
+
 type ReqBody = {
   sessionId?: string;
   userText: string;
@@ -13,6 +18,8 @@ type ReqBody = {
   scenarioDesc?: string;
   npcRoleName?: string;
   npcRoleDesc?: string;
+  messages?: ChatHistoryItem[];
+  isClosing?: boolean;
 };
 
 const CORS_HEADERS: Record<string, string> = {
@@ -28,11 +35,11 @@ function json(data: unknown, status = 200) {
   });
 }
 
-// Responses API 결과에서 텍스트 뽑기(안전)
 function extractOutputText(respJson: any): string {
   if (typeof respJson?.output_text === "string" && respJson.output_text.trim()) {
     return respJson.output_text.trim();
   }
+
   const out = respJson?.output;
   if (Array.isArray(out)) {
     for (const item of out) {
@@ -45,19 +52,47 @@ function extractOutputText(respJson: any): string {
       }
     }
   }
+
   return "";
 }
 
+function normalizeHistory(messages: unknown): Array<{ role: "assistant" | "user"; content: string }> {
+  if (!Array.isArray(messages)) return [];
+
+  return messages
+    .filter(
+      (m): m is ChatHistoryItem =>
+        !!m &&
+        typeof m === "object" &&
+        (m as any).role &&
+        ((m as any).role === "assistant" || (m as any).role === "user") &&
+        typeof (m as any).text === "string"
+    )
+    .map((m) => ({
+      role: m.role,
+      content: m.text.trim(),
+    }))
+    .filter((m) => m.content.length > 0)
+    .slice(-12);
+}
+
 serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response("ok", { status: 200, headers: CORS_HEADERS });
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { status: 200, headers: CORS_HEADERS });
+  }
 
-  // health check
-  if (req.method === "GET") return json({ ok: true, function: "chat", method: "GET" }, 200);
+  if (req.method === "GET") {
+    return json({ ok: true, function: "chat", method: "GET" }, 200);
+  }
 
-  if (req.method !== "POST") return json({ error: "Method not allowed", method: req.method }, 405);
+  if (req.method !== "POST") {
+    return json({ error: "Method not allowed", method: req.method }, 405);
+  }
 
   const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
-  if (!OPENAI_API_KEY) return json({ error: "Missing OPENAI_API_KEY in secrets" }, 500);
+  if (!OPENAI_API_KEY) {
+    return json({ error: "Missing OPENAI_API_KEY in secrets" }, 500);
+  }
 
   const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
   const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -84,9 +119,13 @@ serve(async (req) => {
     scenarioDesc = "",
     npcRoleName = "NPC",
     npcRoleDesc = "",
+    messages = [],
+    isClosing = false,
   } = body;
 
-  if (!userText?.trim()) return json({ error: "userText required" }, 400);
+  if (!userText?.trim()) {
+    return json({ error: "userText required" }, 400);
+  }
 
   const system = [
     `You are roleplaying as an NPC in an English conversation training app.`,
@@ -102,8 +141,12 @@ serve(async (req) => {
     `RULES`,
     `1) Speak only in English.`,
     `2) Keep it natural and short.`,
-    `3) Ask one question at a time.`,
+    `3) Ask one question at a time unless you are closing the conversation.`,
     `4) Stay in character.`,
+    `5) Be consistent with the previous conversation history.`,
+    isClosing
+      ? `6) The conversation goals are already completed. End the conversation naturally based on what has already been said. Do not introduce a new topic. Keep the closing short and warm.`
+      : `6) Continue the conversation naturally from the previous dialogue.`,
     ``,
     `DIFFICULTY: ${difficulty}`,
     `QUESTION_SPEED: ${questionSpeed}`,
@@ -112,12 +155,13 @@ serve(async (req) => {
     `Return JSON ONLY with keys: ai_text, correction (nullable).`,
     `If mode is "correct", correction must be the corrected version of the user's last sentence.`,
     `If mode is "suggest", correction can be a more natural option or null.`,
+    `If isClosing is true, correction should usually be null.`,
   ]
     .filter(Boolean)
     .join("\n");
 
-  // 1) Chat 생성 (Responses API)
-  // ✅ response_format -> text.format 으로 변경
+  const historyInputs = normalizeHistory(messages);
+
   const chatResp = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
     headers: {
@@ -128,9 +172,9 @@ serve(async (req) => {
       model: "gpt-4.1-mini",
       input: [
         { role: "system", content: system },
-        { role: "user", content: userText },
+        ...historyInputs,
+        { role: "user", content: userText.trim() },
       ],
-      // ✅ JSON만 출력하도록 강제
       text: { format: { type: "json_object" } },
     }),
   });
@@ -145,16 +189,16 @@ serve(async (req) => {
 
   let ai_text = "";
   let correction: string | null = null;
+
   try {
     const parsed = JSON.parse(rawText);
-    ai_text = String(parsed?.ai_text ?? "");
+    ai_text = String(parsed?.ai_text ?? "").trim();
     correction = parsed?.correction ?? null;
   } catch {
     ai_text = rawText || "Sorry, could you say that again?";
     correction = null;
   }
 
-  // 2) TTS 생성 (mp3)
   const ttsResp = await fetch("https://api.openai.com/v1/audio/speech", {
     method: "POST",
     headers: {
@@ -176,7 +220,6 @@ serve(async (req) => {
 
   const audioBytes = new Uint8Array(await ttsResp.arrayBuffer());
 
-  // 3) Storage 업로드
   const filePath = `session_${sessionId}/${crypto.randomUUID()}.mp3`;
   const { error: upErr } = await supabase.storage.from("tts").upload(filePath, audioBytes, {
     contentType: "audio/mpeg",

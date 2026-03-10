@@ -1,302 +1,230 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
-import {
-  RealtimeVoiceClient,
-  extractRealtimeAssistantText,
-  extractRealtimeUserText,
-} from "@/lib/realtimeClient";
 import styles from "./PlayPage.module.css";
 
-type VariantPath = "a" | "b";
-function normalizeVariant(v: unknown): VariantPath {
-  const s = String(v ?? "").trim().toLowerCase();
-  return s === "b" ? "b" : "a";
-}
-
-type PlayState = "idle" | "listening" | "processing";
-
-type Msg = {
+type ChatItem = {
   id: string;
-  role: "ai" | "user";
+  role: "assistant" | "user";
   text: string;
-  createdAt: number;
-  correctedText?: string | null;
 };
 
-type SessionRow = {
-  session_id: string;
-  user_id: string;
-  variant: string;
-  package_id: string | null;
-  scenario_id: string | null;
-  started_at: string;
-  ended_at: string | null;
-  status: string;
-  end_reason: string | null;
-  turn_limit: number | null;
-  turn_count_user: number;
-  turn_count_ai: number;
-};
-
-type SettingsRow = {
-  session_id: string;
-  correction_mode: "correct" | "suggest";
-  difficulty: "basic" | "intermediate";
-  question_speed: number;
+type GoalState = {
+  goal_id: string;
+  goal_title: string;
+  goal_definition: any;
+  achieved: boolean;
 };
 
 type ScenarioRow = {
   scenario_id: string;
-  package_id: string;
   title: string;
   scenario_desc: string | null;
-  thumb_url: string | null;
+  first_chat: string | null;
 };
 
 type NpcRow = {
-  npc_id: string;
-  scenario_id: string;
   role_name: string;
   role_desc: string | null;
-  avatar_url: string | null;
-  sort_order: number | null;
 };
 
-type DbTurn = {
-  turn_id: string;
-  session_id: string;
-  turn_no: number;
-  role: string;
-  text_raw: string | null;
-  text_corrected: string | null;
-  created_at: string;
-};
+type SpeechRecognitionCtor = new () => SpeechRecognition;
 
-type ScenarioGoalRow = {
-  goal_id: string;
-  scenario_id: string;
-  goal_title: string;
-  goal_type: string;
-  goal_definition: any;
-  success_threshold: number | null;
-  version: number | null;
-  is_active: boolean;
-  created_at: string;
-};
+declare global {
+  interface Window {
+    SpeechRecognition?: SpeechRecognitionCtor;
+    webkitSpeechRecognition?: SpeechRecognitionCtor;
+  }
 
-function isIOS() {
-  const ua = navigator.userAgent || "";
-  return /iPhone|iPad|iPod/i.test(ua);
+  interface SpeechRecognition extends EventTarget {
+    lang: string;
+    continuous: boolean;
+    interimResults: boolean;
+    maxAlternatives: number;
+    onstart: ((this: SpeechRecognition, ev: Event) => any) | null;
+    onresult: ((this: SpeechRecognition, ev: SpeechRecognitionEvent) => any) | null;
+    onerror: ((this: SpeechRecognition, ev: any) => any) | null;
+    onend: ((this: SpeechRecognition, ev: Event) => any) | null;
+    start(): void;
+    stop(): void;
+  }
+
+  interface SpeechRecognitionEvent extends Event {
+    results: SpeechRecognitionResultList;
+    resultIndex: number;
+  }
 }
 
-function pad2(n: number) {
-  return String(n).padStart(2, "0");
+function uid() {
+  return Math.random().toString(36).slice(2) + Date.now().toString(36);
 }
 
-function mmss(sec: number) {
-  const m = Math.floor(sec / 60);
-  const s = sec % 60;
-  return `${pad2(m)}:${pad2(s)}`;
+function toChatHistory(list: ChatItem[]) {
+  return list.map((m) => ({
+    role: m.role,
+    text: m.text,
+  }));
 }
 
 export default function PlayPage() {
+  const { sessionId = "" } = useParams();
   const navigate = useNavigate();
-  const params = useParams();
   const location = useLocation();
 
-  const pathVariant: VariantPath = location.pathname.startsWith("/b") ? "b" : "a";
-  const sessionId = (params as any).sessionId as string | undefined;
+  const basePath = location.pathname.startsWith("/b") ? "/b" : "/a";
 
-  const [loading, setLoading] = useState(true);
-  const [fatal, setFatal] = useState<string | null>(null);
+  const [messages, setMessages] = useState<ChatItem[]>([]);
+  const [goals, setGoals] = useState<GoalState[]>([]);
+  const [scenarioTitle, setScenarioTitle] = useState("");
+  const [scenarioDesc, setScenarioDesc] = useState("");
+  const [npcRole, setNpcRole] = useState("");
+  const [npcDesc, setNpcDesc] = useState("");
+  const [firstChatText, setFirstChatText] = useState("");
 
-  const [playState, setPlayState] = useState<PlayState>("idle");
-  const [messages, setMessages] = useState<Msg[]>([]);
+  const [status, setStatus] = useState<
+    "booting" | "idle" | "recording" | "thinking" | "ai-speaking"
+  >("booting");
+  const [liveTranscript, setLiveTranscript] = useState("");
+  const [speechSupported, setSpeechSupported] = useState(false);
+  const [startModalOpen, setStartModalOpen] = useState(true);
+  const [readyForStart, setReadyForStart] = useState(false);
 
-  const [session, setSession] = useState<SessionRow | null>(null);
-  const [settings, setSettings] = useState<SettingsRow | null>(null);
-  const [scenario, setScenario] = useState<ScenarioRow | null>(null);
-  const [npc, setNpc] = useState<NpcRow | null>(null);
-
-  const [elapsedSec, setElapsedSec] = useState(0);
-  const [hasUserStarted, setHasUserStarted] = useState(false);
-
-  const [goals, setGoals] = useState<ScenarioGoalRow[]>([]);
-  const [checkedGoalIds, setCheckedGoalIds] = useState<Record<string, boolean>>({});
-
-  const [isAiSpeaking, setIsAiSpeaking] = useState(false);
-  const [connecting, setConnecting] = useState(false);
-
-  const chatScrollRef = useRef<HTMLDivElement | null>(null);
-  const bottomRef = useRef<HTMLDivElement | null>(null);
-
-  const realtimeRef = useRef<RealtimeVoiceClient | null>(null);
-  const endingRef = useRef(false);
-  const lastUserTextRef = useRef<string>("");
-  const sessionRef = useRef<SessionRow | null>(null);
-  const scenarioRef = useRef<ScenarioRow | null>(null);
-  const goalsRef = useRef<ScenarioGoalRow[]>([]);
-  const isBRef = useRef(false);
-  const turnLimitRef = useRef(20);
-
-  const variant: VariantPath = normalizeVariant(session?.variant ?? pathVariant);
-  const isB = variant === "b";
-
-  const turnLimit = useMemo(() => session?.turn_limit ?? 20, [session?.turn_limit]);
-
-  const pairTurnsNow = useMemo(() => {
-    const u = session?.turn_count_user ?? 0;
-    const a = session?.turn_count_ai ?? 0;
-    return Math.min(u, a);
-  }, [session?.turn_count_user, session?.turn_count_ai]);
-
-  const progressRatio = useMemo(() => {
-    if (isB) return 0;
-    return Math.min(1, pairTurnsNow / Math.max(1, turnLimit));
-  }, [isB, pairTurnsNow, turnLimit]);
-
-  const goalsDone = useMemo(() => {
-    if (!isB) return false;
-    if (goals.length === 0) return false;
-    return goals.every((g) => checkedGoalIds[g.goal_id]);
-  }, [isB, goals, checkedGoalIds]);
-
-  const goalsCount = goals.length;
-  const goalsCheckedCount = useMemo(
-    () => goals.filter((g) => checkedGoalIds[g.goal_id]).length,
-    [goals, checkedGoalIds]
-  );
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const streamRef = useRef<MediaStream | null>(null);
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const finishedRef = useRef(false);
+  const messagesRef = useRef<ChatItem[]>([]);
+  const startedAtRef = useRef<number>(Date.now());
 
   useEffect(() => {
-    sessionRef.current = session;
-  }, [session]);
+    messagesRef.current = messages;
+  }, [messages]);
 
   useEffect(() => {
-    scenarioRef.current = scenario;
-  }, [scenario]);
+    startedAtRef.current = Date.now();
+    void init();
+    setupSpeechRecognition();
 
-  useEffect(() => {
-    goalsRef.current = goals;
-  }, [goals]);
-
-  useEffect(() => {
-    isBRef.current = isB;
-  }, [isB]);
-
-  useEffect(() => {
-    turnLimitRef.current = turnLimit;
-  }, [turnLimit]);
-
-  useEffect(() => {
-    const t = setInterval(() => {
-      if (session?.status === "active") setElapsedSec((v) => v + 1);
-    }, 1000);
-    return () => clearInterval(t);
-  }, [session?.status]);
-
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-    const el = chatScrollRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [messages.length]);
-
-  useEffect(() => {
     return () => {
-      realtimeRef.current?.close();
+      recognitionRef.current?.stop();
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop());
+      }
     };
   }, []);
 
-  async function getNextTurnNo(): Promise<number> {
-    if (!sessionId) return 1;
+  function setupSpeechRecognition() {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 
-    const { data, error } = await supabase
-      .from("roleplay_turns")
-      .select("turn_no")
-      .eq("session_id", sessionId)
-      .order("turn_no", { ascending: false })
-      .limit(1);
+    if (!SR) {
+      setSpeechSupported(false);
+      return;
+    }
 
-    if (error) return (messages?.length ?? 0) + 1;
-    return (data?.[0]?.turn_no ?? 0) + 1;
-  }
+    setSpeechSupported(true);
 
-  async function endSession(reason: "user_exit" | "turn_limit" | "goals_done") {
-    if (!sessionId) return;
-    if (endingRef.current) return;
-    endingRef.current = true;
+    const recognition = new SR();
+    recognition.lang = "en-US";
+    recognition.interimResults = true;
+    recognition.continuous = true;
+    recognition.maxAlternatives = 1;
 
-    realtimeRef.current?.stopMic();
-
-    if (reason !== "user_exit") {
-      const started = Date.now();
-      while (isAiSpeaking && Date.now() - started < 15000) {
-        await new Promise((r) => setTimeout(r, 200));
+    recognition.onresult = (event) => {
+      let transcript = "";
+      for (let i = 0; i < event.results.length; i++) {
+        transcript += event.results[i][0].transcript;
       }
-      await new Promise((r) => setTimeout(r, 3000));
-    } else {
-      realtimeRef.current?.close();
-    }
-
-    try {
-      await supabase
-        .from("roleplay_sessions")
-        .update({ status: "ended", ended_at: new Date().toISOString(), end_reason: reason })
-        .eq("session_id", sessionId);
-
-      setSession((prev) =>
-        prev ? { ...prev, status: "ended", ended_at: new Date().toISOString(), end_reason: reason } : prev
-      );
-    } finally {
-      navigate(`/${variant}/result/${sessionId}`);
-    }
-  }
-
-  async function checkGoalsWithEdge(args: {
-    sessionId: string;
-    scenarioId: string;
-    userText: string;
-    aiText: string;
-    goals: ScenarioGoalRow[];
-  }): Promise<{ achieved_goal_ids: string[] }> {
-    const { data: sess } = await supabase.auth.getSession();
-    const accessToken = sess.session?.access_token;
-
-    const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
-    const fnUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/goal_check`;
-
-    const payload = {
-      sessionId: args.sessionId,
-      scenarioId: args.scenarioId,
-      userText: args.userText,
-      aiText: args.aiText,
-      goals: args.goals.map((g) => ({
-        goal_id: g.goal_id,
-        goal_title: g.goal_title,
-        goal_type: g.goal_type,
-        goal_definition: g.goal_definition,
-        success_threshold: g.success_threshold,
-      })),
+      setLiveTranscript(transcript.trim());
     };
 
-    const res = await fetch(fnUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        apikey: anonKey,
-        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-      },
-      body: JSON.stringify(payload),
-    });
+    recognition.onerror = (event) => {
+      console.error("speech recognition error:", event);
+    };
 
-    const text = await res.text();
-    let json: any = null;
-    try {
-      json = JSON.parse(text);
-    } catch {
-      json = { raw: text };
+    recognitionRef.current = recognition;
+  }
+
+  async function getCurrentTurnNo() {
+    const { count, error } = await supabase
+      .from("roleplay_turns")
+      .select("*", { count: "exact", head: true })
+      .eq("session_id", sessionId);
+
+    if (error) {
+      console.error("getCurrentTurnNo error:", error);
+      return 0;
     }
 
+    return count ?? 0;
+  }
+
+  async function syncTurnCounts() {
+    const { data, error } = await supabase
+      .from("roleplay_turns")
+      .select("role")
+      .eq("session_id", sessionId);
+
+    if (error) {
+      console.error("syncTurnCounts error:", error);
+      return;
+    }
+
+    const rows = data ?? [];
+    const userCount = rows.filter((r: any) => r.role === "user").length;
+    const aiCount = rows.filter((r: any) => r.role === "ai").length;
+
+    const { error: updateError } = await supabase
+      .from("roleplay_sessions")
+      .update({
+        turn_count_user: userCount,
+        turn_count_ai: aiCount,
+      })
+      .eq("session_id", sessionId);
+
+    if (updateError) {
+      console.error("syncTurnCounts update error:", updateError);
+    }
+  }
+
+  async function saveTurn(params: {
+    role: "ai" | "user";
+    textRaw: string;
+    textCorrected?: string | null;
+    audioUrl?: string | null;
+  }) {
+    const turnNo = (await getCurrentTurnNo()) + 1;
+
+    const { error } = await supabase.from("roleplay_turns").insert({
+      session_id: sessionId,
+      turn_no: turnNo,
+      role: params.role,
+      text_raw: params.textRaw,
+      text_corrected: params.textCorrected ?? null,
+      audio_url: params.audioUrl ?? null,
+      created_at: new Date().toISOString(),
+    });
+
+    if (error) {
+      console.error("saveTurn error:", error);
+      return;
+    }
+
+    await syncTurnCounts();
+  }
+
+  async function uploadUserAudio(blob: Blob) {
+    try {
+      const ext = "webm";
+      const filePath = `session_${sessionId}/user_${Date.now()}_${crypto.randomUUID()}.${ext}`;
+
+<<<<<<< HEAD
+      const { error } = await supabase.storage
+        .from("audio")
+        .upload(filePath, blob, {
+          contentType: "audio/webm",
+          upsert: true,
+=======
     if (!res.ok) {
       throw new Error(`goal_check ${res.status}: ${JSON.stringify(json)}`);
     }
@@ -644,182 +572,573 @@ export default function PlayPage() {
         const init: Record<string, boolean> = {};
         gList.forEach((g) => {
           init[g.goal_id] = false;
+>>>>>>> refs/remotes/origin/feature/sehee
         });
-        setCheckedGoalIds(init);
+
+      if (error) {
+        console.error("uploadUserAudio error:", error);
+        return null;
       }
 
-      setLoading(false);
-    })();
-  }, [sessionId, navigate, pathVariant]);
-
-  useEffect(() => {
-    if (!isB) return;
-    if (!loading && goalsDone && session?.status === "active") {
-      void endSession("goals_done");
-    }
-  }, [isB, loading, goalsDone, session?.status]);
-
-  async function startListening() {
-    if (playState !== "idle") return;
-    if (isAiSpeaking) return;
-
-    try {
-      await connectRealtimeWithRetry(3);
-      realtimeRef.current?.startMic();
-      setPlayState("listening");
-    } catch (e: any) {
-      console.error(e);
-      alert(`Realtime 연결 실패: ${e?.message ?? "unknown error"}`);
-      setPlayState("idle");
-      setConnecting(false);
+      const { data } = supabase.storage.from("audio").getPublicUrl(filePath);
+      return data?.publicUrl ?? null;
+    } catch (error) {
+      console.error("uploadUserAudio unexpected error:", error);
+      return null;
     }
   }
 
-  function stopListening() {
-  const client = realtimeRef.current;
-  if (!client) return;
+  async function markSessionEnded(params: {
+    endReason: string;
+    isSuccess: boolean;
+  }) {
+    const durationSec = Math.max(
+      0,
+      Math.round((Date.now() - startedAtRef.current) / 1000)
+    );
 
-  client.stopMic();
+    const { error } = await supabase
+      .from("roleplay_sessions")
+      .update({
+        ended_at: new Date().toISOString(),
+        status: "ended",
+        end_reason: params.endReason,
+        is_success: params.isSuccess,
+        duration_sec: durationSec,
+      })
+      .eq("session_id", sessionId);
 
-  client.sendEvent({
-    type: "response.create",
-  });
+    if (error) {
+      console.error("markSessionEnded error:", error);
+    }
+  }
 
-  setPlayState("processing");
-}
+  async function init() {
+    try {
+      const { data: session, error: sessionError } = await supabase
+        .from("roleplay_sessions")
+        .select("scenario_id, started_at")
+        .eq("session_id", sessionId)
+        .single();
 
-  const micLabel = useMemo(() => {
-    if (connecting) return "연결 중…";
-    if (isAiSpeaking) return "AI가 말하고 있어요. 끝난 뒤에 다시 말해주세요.";
-
-    if (isB) {
-      if (playState === "idle") {
-        return "버튼을 누르고 말해주세요";
+      if (sessionError || !session?.scenario_id) {
+        console.error("session fetch error:", sessionError);
+        setStatus("idle");
+        return;
       }
-      if (playState === "listening") {
-        return isIOS()
-          ? "말이 끝나면 버튼을 다시 눌러주세요."
-          : "듣고 있어요. 말이 끝나면 버튼을 다시 눌러주세요.";
+
+      if (session.started_at) {
+        startedAtRef.current = new Date(session.started_at).getTime();
       }
-      return "응답을 기다리고 있어요";
+
+      const scenarioId = session.scenario_id;
+
+      const [{ data: scenario, error: scenarioError }, { data: goalData }, { data: npcData }] =
+        await Promise.all([
+          supabase
+            .from("scenarios")
+            .select("scenario_id, title, scenario_desc, first_chat")
+            .eq("scenario_id", scenarioId)
+            .single(),
+          supabase
+            .from("scenario_goals")
+            .select("goal_id, goal_title, goal_definition")
+            .eq("scenario_id", scenarioId)
+            .order("created_at", { ascending: true }),
+          supabase
+            .from("scenario_npcs")
+            .select("role_name, role_desc")
+            .eq("scenario_id", scenarioId)
+            .limit(1),
+        ]);
+
+      if (scenarioError || !scenario) {
+        console.error("scenario fetch error:", scenarioError);
+        setStatus("idle");
+        return;
+      }
+
+      const scenarioRow = scenario as ScenarioRow;
+
+      setScenarioTitle(scenarioRow.title ?? "시나리오 명");
+      setScenarioDesc(scenarioRow.scenario_desc ?? "");
+
+      if (npcData?.length) {
+        setNpcRole(npcData[0].role_name ?? "");
+        setNpcDesc(npcData[0].role_desc ?? "");
+      }
+
+      setGoals(
+        (goalData ?? []).map((g: any) => ({
+          goal_id: g.goal_id,
+          goal_title: g.goal_title,
+          goal_definition: g.goal_definition,
+          achieved: false,
+        }))
+      );
+
+      const firstChat =
+        typeof scenarioRow.first_chat === "string" && scenarioRow.first_chat.trim()
+          ? scenarioRow.first_chat.trim()
+          : "Hello, what brings you here?";
+
+      setFirstChatText(firstChat);
+
+      const firstMessage: ChatItem = {
+        id: uid(),
+        role: "assistant",
+        text: firstChat,
+      };
+
+      setMessages([firstMessage]);
+      setReadyForStart(true);
+      setStatus("booting");
+
+      const { count } = await supabase
+        .from("roleplay_turns")
+        .select("*", { count: "exact", head: true })
+        .eq("session_id", sessionId);
+
+      if ((count ?? 0) === 0) {
+        await saveTurn({
+          role: "ai",
+          textRaw: firstChat,
+          audioUrl: null,
+        });
+      }
+    } catch (error) {
+      console.error("init error:", error);
+      setStatus("idle");
+    }
+  }
+
+  async function playFirstChat() {
+    if (!firstChatText.trim()) {
+      setStatus("idle");
+      return;
     }
 
-    if (!hasUserStarted) return "버튼을 누르고 대화를 시작해주세요";
-    if (playState === "idle") return "말을 시작할 때 버튼을 눌러주세요";
-    if (playState === "listening") return "듣고 있어요. 말이 끝나면 버튼을 다시 눌러주세요.";
-    return "응답을 기다리고 있어요";
-  }, [connecting, isAiSpeaking, isB, playState, hasUserStarted]);
+    try {
+      setStatus("ai-speaking");
 
-  if (loading) return <div className={styles.loading}>불러오는 중…</div>;
+      const tts = await supabase.functions.invoke("chat_tts", {
+        body: {
+          sessionId,
+          text: firstChatText,
+          voice: "alloy",
+        },
+      });
 
-  if (fatal) {
-    return (
-      <div className={styles.loading}>
-        <div style={{ marginBottom: 10, color: "#b00020" }}>에러: {fatal}</div>
-        <button className={styles.smallBtn} onClick={() => navigate(-1)}>
-          뒤로가기
-        </button>
-      </div>
-    );
+      if (tts.error) {
+        console.error("chat_tts error:", tts.error);
+        setStatus("idle");
+        return;
+      }
+
+      const audioUrl = tts.data?.tts_audio_url ?? null;
+
+      if (!audioUrl) {
+        setStatus("idle");
+        return;
+      }
+
+      const { data: firstTurn } = await supabase
+        .from("roleplay_turns")
+        .select("turn_id")
+        .eq("session_id", sessionId)
+        .eq("turn_no", 1)
+        .single();
+
+      if (firstTurn?.turn_id) {
+        await supabase
+          .from("roleplay_turns")
+          .update({ audio_url: audioUrl })
+          .eq("turn_id", firstTurn.turn_id);
+      }
+
+      const audio = new Audio(audioUrl);
+      audio.onended = () => {
+        setStatus("idle");
+      };
+
+      await audio.play();
+    } catch (error) {
+      console.error("playFirstChat error:", error);
+      setStatus("idle");
+    }
+  }
+
+  async function handleStartConfirm() {
+    setStartModalOpen(false);
+    await playFirstChat();
+  }
+
+  async function startRecording() {
+    try {
+      setLiveTranscript("");
+
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+
+      const recorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = recorder;
+      chunksRef.current = [];
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) {
+          chunksRef.current.push(e.data);
+        }
+      };
+
+      recorder.onstop = async () => {
+        try {
+          const blob = new Blob(chunksRef.current, { type: "audio/webm" });
+          await handleSpeech(blob);
+        } finally {
+          if (streamRef.current) {
+            streamRef.current.getTracks().forEach((track) => track.stop());
+            streamRef.current = null;
+          }
+        }
+      };
+
+      recorder.start();
+
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.start();
+        } catch (error) {
+          console.warn("speech recognition start skipped:", error);
+        }
+      }
+
+      setStatus("recording");
+    } catch (error) {
+      console.error("startRecording error:", error);
+      setStatus("idle");
+    }
+  }
+
+  async function stopRecording() {
+    recognitionRef.current?.stop();
+    mediaRecorderRef.current?.stop();
+    setStatus("thinking");
+  }
+
+  async function handleSpeech(blob: Blob) {
+    try {
+      const userAudioUrl = await uploadUserAudio(blob);
+
+      const form = new FormData();
+      form.append("file", blob, "recording.webm");
+
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      const sttRes = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/stt`, {
+        method: "POST",
+        headers: {
+          apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${
+            session?.access_token ?? import.meta.env.VITE_SUPABASE_ANON_KEY
+          }`,
+        },
+        body: form,
+      });
+
+      if (!sttRes.ok) {
+        const text = await sttRes.text();
+        throw new Error(text || "stt 호출 실패");
+      }
+
+      const sttJson = await sttRes.json();
+      const userText = (sttJson?.text ?? "").trim();
+
+      setLiveTranscript("");
+
+      if (!userText) {
+        setStatus("idle");
+        return;
+      }
+
+      const userMsg: ChatItem = {
+        id: uid(),
+        role: "user",
+        text: userText,
+      };
+
+      const historyBeforeReply = [...messagesRef.current, userMsg];
+      setMessages(historyBeforeReply);
+
+      await saveTurn({
+        role: "user",
+        textRaw: userText,
+        audioUrl: userAudioUrl,
+      });
+
+      const shouldFinish = await checkGoals(userText, historyBeforeReply);
+      if (shouldFinish) {
+        return;
+      }
+
+      const chatRes = await supabase.functions.invoke("chat", {
+        body: {
+          sessionId,
+          userText,
+          mode: "suggest",
+          difficulty: "basic",
+          questionSpeed: 1.0,
+          scenarioTitle,
+          scenarioDesc,
+          npcRoleName: npcRole || "NPC",
+          npcRoleDesc: npcDesc || "",
+          messages: toChatHistory(historyBeforeReply),
+          isClosing: false,
+        },
+      });
+
+      if (chatRes.error) {
+        console.error("chat invoke error:", chatRes.error);
+        setStatus("idle");
+        return;
+      }
+
+      const aiText = chatRes.data?.ai_text ?? "Sorry, could you say that again?";
+      const ttsAudioUrl = chatRes.data?.tts_audio_url ?? null;
+      const correction = chatRes.data?.correction ?? null;
+
+      const aiMsg: ChatItem = {
+        id: uid(),
+        role: "assistant",
+        text: aiText,
+      };
+
+      setMessages((prev) => [...prev, aiMsg]);
+
+      await saveTurn({
+        role: "ai",
+        textRaw: aiText,
+        textCorrected: correction,
+        audioUrl: ttsAudioUrl,
+      });
+
+      if (ttsAudioUrl) {
+        setStatus("ai-speaking");
+
+        const audio = new Audio(ttsAudioUrl);
+        audio.onended = () => {
+          setStatus("idle");
+        };
+
+        await audio.play();
+      } else {
+        setStatus("idle");
+      }
+    } catch (error) {
+      console.error("handleSpeech error:", error);
+      setLiveTranscript("");
+      setStatus("idle");
+    }
+  }
+
+  async function checkGoals(userText: string, historyBeforeReply: ChatItem[]): Promise<boolean> {
+    try {
+      const res = await supabase.functions.invoke("goal_check", {
+        body: {
+          userText,
+          goals: goals.map((g) => ({
+            goal_id: g.goal_id,
+            goal_title: g.goal_title,
+            goal_definition: g.goal_definition,
+          })),
+        },
+      });
+
+      if (res.error) {
+        console.error("goal_check error:", res.error);
+        return false;
+      }
+
+      const achievedIds: string[] = Array.isArray(res.data?.achieved_goal_ids)
+        ? res.data.achieved_goal_ids
+        : [];
+
+      const updatedGoals = goals.map((goal) =>
+        achievedIds.includes(goal.goal_id) ? { ...goal, achieved: true } : goal
+      );
+
+      setGoals(updatedGoals);
+
+      const doneCount = updatedGoals.filter((g) => g.achieved).length;
+
+      if (doneCount >= 3 && !finishedRef.current) {
+        finishedRef.current = true;
+        await finishConversation(historyBeforeReply);
+        return true;
+      }
+
+      return false;
+    } catch (error) {
+      console.error("checkGoals error:", error);
+      return false;
+    }
+  }
+
+  async function finishConversation(history: ChatItem[]) {
+    try {
+      const chat = await supabase.functions.invoke("chat", {
+        body: {
+          sessionId,
+          userText: "Please end this conversation naturally.",
+          scenarioTitle,
+          scenarioDesc,
+          npcRoleName: npcRole || "NPC",
+          npcRoleDesc: npcDesc || "",
+          mode: "suggest",
+          difficulty: "basic",
+          questionSpeed: 1.0,
+          messages: toChatHistory(history),
+          isClosing: true,
+        },
+      });
+
+      const text = chat.data?.ai_text ?? "Thanks for talking with me. Goodbye!";
+      const audioUrl = chat.data?.tts_audio_url ?? null;
+      const correction = chat.data?.correction ?? null;
+
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: uid(),
+          role: "assistant",
+          text,
+        },
+      ]);
+
+      await saveTurn({
+        role: "ai",
+        textRaw: text,
+        textCorrected: correction,
+        audioUrl,
+      });
+
+      await markSessionEnded({
+        endReason: "goals_done",
+        isSuccess: true,
+      });
+
+      if (audioUrl) {
+        setStatus("ai-speaking");
+
+        const audio = new Audio(audioUrl);
+        audio.onended = () => {
+          navigate(`${basePath}/result/${sessionId}`);
+        };
+
+        await audio.play();
+      } else {
+        navigate(`${basePath}/result/${sessionId}`);
+      }
+    } catch (error) {
+      console.error("finishConversation error:", error);
+      navigate(`${basePath}/result/${sessionId}`);
+    }
+  }
+
+  function handleMic() {
+    if (startModalOpen || !readyForStart) return;
+
+    if (status === "idle") {
+      void startRecording();
+      return;
+    }
+
+    if (status === "recording") {
+      void stopRecording();
+    }
   }
 
   return (
     <div className={styles.container}>
-      <div className={styles.topArea}>
-        <div className={styles.header}>
-          <div className={styles.headerTitle}>{scenario?.title ?? "시나리오 명"}</div>
-          <button className={styles.closeBtn} onClick={() => void endSession("user_exit")} aria-label="close">
-            ✕
-          </button>
-        </div>
-
-        <div className={styles.metaRow}>
-          <div className={styles.timer}>{mmss(elapsedSec)}</div>
-
-          {!isB ? (
-            <div className={styles.turnCount}>
-              {pad2(Math.min(pairTurnsNow, turnLimit))}/{pad2(turnLimit)}
+      {startModalOpen && (
+        <div className={styles.modalOverlay}>
+          <div className={styles.modalCard}>
+            <div className={styles.modalTitle}>대화가 곧 시작됩니다.</div>
+            <div className={styles.modalText}>
+              스피커와 마이크 연결을 확인해주세요.
             </div>
-          ) : (
-            <div className={styles.turnCount}>
-              {goalsCheckedCount}/{Math.max(1, goalsCount)}
-            </div>
-          )}
-        </div>
-
-        {!isB && (
-          <div className={styles.progressBar}>
-            <div className={styles.progressFill} style={{ width: `${progressRatio * 100}%` }} />
+            <button
+              className={styles.modalButton}
+              type="button"
+              onClick={handleStartConfirm}
+              disabled={!readyForStart}
+            >
+              확인
+            </button>
           </div>
-        )}
+        </div>
+      )}
 
-        {isB && (
-          <div className={styles.goalPanel}>
-            <div className={styles.goalPanelTitle}>목표</div>
-            <div className={styles.goalBox}>
-              {goals.map((g) => {
-                const checked = !!checkedGoalIds[g.goal_id];
-                return (
-                  <div key={g.goal_id} className={styles.goalItem}>
-                    <img src={checked ? "/check_act.svg" : "/check_dis.svg"} className={styles.goalIcon} alt="" />
-                    <span className={styles.goalText}>{g.goal_title}</span>
-                  </div>
-                );
-              })}
+      <header className={styles.header}>
+        <div>{scenarioTitle}</div>
+      </header>
+
+      <div className={styles.goalCard}>
+        {goals.map((g) => (
+          <div key={g.goal_id}>
+            {g.achieved ? "✅" : "⬜"} {g.goal_title}
+          </div>
+        ))}
+      </div>
+
+      <div className={styles.chatArea}>
+        {messages.map((m) => (
+          <div key={m.id} className={m.role === "assistant" ? styles.left : styles.right}>
+            <div
+              className={`${styles.bubble} ${
+                m.role === "assistant" ? styles.assistantBubble : styles.userBubble
+              }`}
+            >
+              {m.text}
             </div>
           </div>
-        )}
+        ))}
 
-        {!isB && (
-          <div className={styles.scDescCard}>
-            <div className={styles.scDescTitle}>시나리오 설명</div>
-            <div className={styles.scDescBody}>{scenario?.scenario_desc ?? "설명 문장"}</div>
+        {status === "recording" && liveTranscript && (
+          <div className={styles.right}>
+            <div className={`${styles.bubble} ${styles.userBubble} ${styles.liveBubble}`}>
+              {liveTranscript}
+            </div>
           </div>
         )}
       </div>
 
-      <div ref={chatScrollRef} className={styles.chatArea}>
-        {messages.map((m) => {
-          const isAiMsg = m.role === "ai";
-          return (
-            <div key={m.id} className={isAiMsg ? styles.aiWrap : styles.userWrap}>
-              <div className={isAiMsg ? styles.aiBubble : styles.userBubble}>
-                <div className={styles.bubbleText}>{m.text}</div>
-
-                {!isAiMsg && (settings?.correction_mode ?? "suggest") === "correct" && (
-                  <>
-                    {!m.correctedText ? (
-                      <div className={styles.subAction}>교정하기</div>
-                    ) : (
-                      <div className={styles.correctionCard}>
-                        <div className={styles.correctionTitle}>교정</div>
-                        <div className={styles.correctionBody}>{m.correctedText}</div>
-                      </div>
-                    )}
-                  </>
-                )}
-              </div>
-            </div>
-          );
-        })}
-
-        <div ref={bottomRef} />
-      </div>
-
-      <div className={styles.micArea}>
-        <div className={styles.micHint}>{micLabel}</div>
+      <div className={styles.bottom}>
+        <div className={styles.status}>
+          {startModalOpen
+            ? "확인 버튼을 누르면 대화가 시작됩니다."
+            : status === "recording"
+            ? "듣고 있어요. 말하는 내용이 실시간으로 표시됩니다."
+            : status === "thinking"
+            ? "응답을 기다리고 있어요"
+            : status === "ai-speaking"
+            ? "AI가 말하고 있어요"
+            : "버튼을 누르고 대화를 시작해주세요"}
+          {!speechSupported && status === "idle"
+            ? " (실시간 전사는 일부 브라우저에서만 지원)"
+            : ""}
+        </div>
 
         <button
-          className={styles.micBtn}
-          onClick={playState === "listening" ? stopListening : () => void startListening()}
-          disabled={connecting || isAiSpeaking || (!isB && pairTurnsNow >= turnLimit) || (isB && goalsDone)}
-          aria-label="mic"
+          className={styles.mic}
+          onClick={handleMic}
+          disabled={
+            startModalOpen || status === "thinking" || status === "ai-speaking"
+          }
+          type="button"
         >
-          <img
-            className={styles.micIcon}
-            src={playState === "listening" ? "/record.svg" : "/speak.svg"}
-            alt={playState === "listening" ? "record" : "speak"}
-          />
+          🎤
         </button>
       </div>
     </div>

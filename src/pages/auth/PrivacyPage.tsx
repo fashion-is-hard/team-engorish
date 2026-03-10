@@ -91,7 +91,7 @@ export default function PrivacyPage() {
 
         <div className={styles.footer}>
           <p>문의: rlatpgmlid@naver.com</p>
-          <p>시행일: 2026년 3월 7일</p>
+          <p>시행일: 2026년 3월 10일</p>
         </div>
       </div>
     </div>
