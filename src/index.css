@@ -45,15 +45,3 @@ button{
   font: inherit;
 }
 
-/* 데스크탑에서만 폰 프레임 */
-@media (min-width: 768px){
-  body{
-    background:#F3F4F6;
-  }
-  #root{
-    max-width: 430px;
-    margin: 0 auto;
-    background:#fff;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.12);
-  }
-}

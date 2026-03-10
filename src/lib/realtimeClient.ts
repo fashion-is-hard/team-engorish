@@ -1,5 +1,5 @@
 // src/lib/realtimeClient.ts
-console.log("REALTIME CLIENT VERSION 2");
+console.log("REALTIME CLIENT CLEAN");
 
 export type RealtimeServerEvent = {
   type: string;
@@ -34,6 +34,39 @@ function waitForIceGatheringComplete(pc: RTCPeerConnection) {
   });
 }
 
+function waitForDataChannelOpen(dc: RTCDataChannel) {
+  return new Promise<void>((resolve, reject) => {
+    if (dc.readyState === "open") {
+      resolve();
+      return;
+    }
+
+    const onOpen = () => {
+      cleanup();
+      resolve();
+    };
+
+    const onError = () => {
+      cleanup();
+      reject(new Error("Realtime data channel failed to open"));
+    };
+
+    const timeout = window.setTimeout(() => {
+      cleanup();
+      reject(new Error("Timed out waiting for realtime data channel"));
+    }, 10000);
+
+    const cleanup = () => {
+      window.clearTimeout(timeout);
+      dc.removeEventListener("open", onOpen);
+      dc.removeEventListener("error", onError);
+    };
+
+    dc.addEventListener("open", onOpen);
+    dc.addEventListener("error", onError);
+  });
+}
+
 export class RealtimeVoiceClient {
   private pc: RTCPeerConnection | null = null;
   private dc: RTCDataChannel | null = null;
@@ -41,6 +74,7 @@ export class RealtimeVoiceClient {
   private micTrack: MediaStreamTrack | null = null;
   private remoteAudioEl: HTMLAudioElement | null = null;
   private connected = false;
+  private ready = false;
   private opts: RealtimeClientOptions;
 
   constructor(opts: RealtimeClientOptions) {
@@ -51,13 +85,17 @@ export class RealtimeVoiceClient {
     return this.connected;
   }
 
+  isReady() {
+    return this.ready;
+  }
+
   private emitError(message: string) {
     console.error("[RealtimeVoiceClient]", message);
     this.opts.onError?.(message);
   }
 
   async connect() {
-    if (this.connected) return;
+    if (this.connected && this.ready) return;
 
     const tokenRes = await fetch(this.opts.tokenEndpoint, {
       method: "POST",
@@ -75,26 +113,27 @@ export class RealtimeVoiceClient {
     try {
       tokenJson = JSON.parse(raw);
     } catch {
-      tokenJson = { raw };
+      throw new Error(`Token endpoint returned non-JSON: ${raw}`);
     }
 
     const ephemeralKey =
-      tokenJson?.value ??
-      tokenJson?.client_secret?.value ??
-      null;
+      typeof tokenJson?.value === "string" && tokenJson.value.trim().length > 0
+        ? tokenJson.value.trim()
+        : typeof tokenJson?.client_secret?.value === "string" &&
+            tokenJson.client_secret.value.trim().length > 0
+          ? tokenJson.client_secret.value.trim()
+          : null;
 
-    console.log("ephemeralKey exists:", !!ephemeralKey);
+    console.log("tokenJson =", tokenJson);
+    console.log("ephemeralKey =", ephemeralKey);
 
     if (!ephemeralKey) {
-      const detail =
-        tokenJson?.detail ??
-        tokenJson?.error ??
-        tokenJson?.raw ??
-        "Failed to get realtime token";
-      throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
-    }
+      const detail = tokenJson?.detail ?? tokenJson?.error ?? tokenJson;
+      const detailText =
+        typeof detail === "string" ? detail : JSON.stringify(detail, null, 2);
 
-    console.log("Realtime token acquired");
+      throw new Error(`Failed to get realtime token: ${detailText}`);
+    }
 
     const pc = new RTCPeerConnection();
     this.pc = pc;
@@ -111,30 +150,15 @@ export class RealtimeVoiceClient {
       audioEl.srcObject = e.streams[0];
     };
 
-    audioEl.onplaying = () => {
-      console.log("remote audio playing");
-      this.opts.onRemoteAudioStart?.();
-    };
-    audioEl.onpause = () => {
-      console.log("remote audio paused");
-      this.opts.onRemoteAudioStop?.();
-    };
-    audioEl.onended = () => {
-      console.log("remote audio ended");
-      this.opts.onRemoteAudioStop?.();
-    };
-    audioEl.onerror = () => {
-      console.log("remote audio error");
-      this.opts.onRemoteAudioStop?.();
-    };
+    audioEl.onplaying = () => this.opts.onRemoteAudioStart?.();
+    audioEl.onpause = () => this.opts.onRemoteAudioStop?.();
+    audioEl.onended = () => this.opts.onRemoteAudioStop?.();
+    audioEl.onerror = () => this.opts.onRemoteAudioStop?.();
 
     pc.onconnectionstatechange = () => {
       console.log("pc.connectionState:", pc.connectionState);
       if (pc.connectionState === "failed") {
         this.emitError("WebRTC connection failed");
-      }
-      if (pc.connectionState === "disconnected" || pc.connectionState === "closed") {
-        this.opts.onRemoteAudioStop?.();
       }
     };
 
@@ -145,46 +169,26 @@ export class RealtimeVoiceClient {
       }
     };
 
-    this.localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    this.micTrack = this.localStream.getAudioTracks()[0];
-    //this.micTrack.enabled = false;
+    this.localStream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      },
+    });
 
+    this.micTrack = this.localStream.getAudioTracks()[0];
     pc.addTrack(this.micTrack, this.localStream);
 
     this.dc = pc.createDataChannel("oai-events");
-
-    this.dc.addEventListener("open", () => {
-      console.log("Realtime data channel open");
-
-      const sessionUpdateEvent = {
-        type: "session.update",
-        session: {
-          instructions:
-            typeof this.opts.sessionPayload?.instructions === "string"
-              ? this.opts.sessionPayload.instructions
-              : "You are a helpful voice conversation partner.",
-          audio: {
-            input: {
-              turn_detection: {type: "server_vad"},
-            },
-            output: {
-              voice: this.opts.sessionPayload?.voice ?? "alloy",
-            },
-          },
-        },
-      };
-
-      console.log("sending session.update", sessionUpdateEvent);
-      this.sendEvent(sessionUpdateEvent);
-    });
 
     this.dc.addEventListener("message", (e) => {
       try {
         const event = JSON.parse(e.data);
         console.log("realtime event:", event);
         this.opts.onEvent?.(event);
-      } catch (err) {
-        this.emitError(`Failed to parse realtime event: ${String(err)}`);
+      } catch {
+        this.emitError("Failed to parse realtime event");
       }
     });
 
@@ -197,9 +201,7 @@ export class RealtimeVoiceClient {
     await waitForIceGatheringComplete(pc);
 
     const sdp = pc.localDescription?.sdp;
-    if (!sdp) {
-      throw new Error("Missing local SDP offer");
-    }
+    if (!sdp) throw new Error("Missing local SDP offer");
 
     const sdpRes = await fetch("https://api.openai.com/v1/realtime/calls", {
       method: "POST",
@@ -224,32 +226,74 @@ export class RealtimeVoiceClient {
 
     this.connected = true;
     console.log("Realtime connected");
+
+    await waitForDataChannelOpen(this.dc);
+    console.log("Realtime data channel open");
+
+    this.sendEvent({
+  type: "session.update",
+  session: {
+    type: "realtime",
+    model: "gpt-realtime",
+    instructions:
+      typeof this.opts.sessionPayload?.instructions === "string"
+        ? this.opts.sessionPayload.instructions
+        : "You are an English conversation partner. Only speak English.",
+    audio: {
+      output: {
+        voice: this.opts.sessionPayload?.voice ?? "marin",
+      },
+    },
+  },
+});
+
+    if (this.micTrack) {
+      this.micTrack.enabled = false;
+    }
+
+    this.ready = true;
+    console.log("Realtime ready");
   }
 
   startMic() {
-    if (this.micTrack) {
-      //this.micTrack.enabled = true;
-      console.log("mic enabled");
-    }
+    if (!this.micTrack) return;
+    this.micTrack.enabled = true;
+    console.log("mic start");
   }
 
   stopMic() {
-    if (this.micTrack) {
-      //this.micTrack.enabled = false;
-      console.log("mic disabled");
-    }
+    if (!this.micTrack) return;
+    this.micTrack.enabled = false;
+    console.log("mic stop");
+  }
+
+  clearInputAudio() {
+    this.sendEvent({
+      type: "input_audio_buffer.clear",
+    });
+  }
+
+  commitUserAudio() {
+    this.sendEvent({
+      type: "input_audio_buffer.commit",
+    });
+  }
+
+  createResponse() {
+    this.sendEvent({
+      type: "response.create",
+    });
   }
 
   sendEvent(event: Record<string, any>) {
-    if (!this.dc || this.dc.readyState !== "open") return;
+    if (!this.dc || this.dc.readyState !== "open") {
+      console.log("data channel not open, skip event:", event?.type);
+      return;
+    }
     this.dc.send(JSON.stringify(event));
   }
 
   close() {
-    try {
-      this.stopMic();
-    } catch {}
-
     try {
       this.dc?.close();
     } catch {}
@@ -276,6 +320,7 @@ export class RealtimeVoiceClient {
     this.dc = null;
     this.pc = null;
     this.connected = false;
+    this.ready = false;
   }
 }
 

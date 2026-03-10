@@ -1,27 +1,24 @@
-/// <reference types="https://deno.land/x/supabase_functions@1.0.0/mod.ts" />
-
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 
-const CORS_HEADERS: Record<string, string> = {
+const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS, GET",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
 function json(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { "Content-Type": "application/json", ...CORS_HEADERS },
+    headers: {
+      "Content-Type": "application/json",
+      ...CORS_HEADERS,
+    },
   });
 }
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { status: 200, headers: CORS_HEADERS });
-  }
-
-  if (req.method === "GET") {
-    return json({ ok: true, function: "realtime_session" });
   }
 
   if (req.method !== "POST") {
@@ -33,15 +30,54 @@ serve(async (req) => {
     return json({ error: "Missing OPENAI_API_KEY" }, 500);
   }
 
-  // ✅ 최소 payload만 보냄
+  let body: any = {};
+  try {
+    body = await req.json();
+  } catch {
+    body = {};
+  }
+
+  const instructions =
+    typeof body?.instructions === "string" && body.instructions.trim()
+      ? body.instructions
+      : "You are an English conversation partner. Only speak English.";
+
+  const voice =
+    typeof body?.voice === "string" && body.voice.trim()
+      ? body.voice
+      : "marin";
+
   const payload = {
-    session: {
-      type: "realtime",
-      model: "gpt-realtime",
+    type: "realtime",
+    model: "gpt-realtime",
+    instructions,
+    audio: {
+      input: {
+        format: {
+          type: "audio/pcm",
+          rate: 24000,
+        },
+        transcription: {
+          model: "gpt-4o-mini-transcribe",
+          language: "en",
+        },
+        turn_detection: null,
+        noise_reduction: {
+          type: "near_field",
+        },
+      },
+      output: {
+        format: {
+          type: "audio/pcm",
+          rate: 24000,
+        },
+        voice,
+        speed: 1,
+      },
     },
   };
 
-  const r = await fetch("https://api.openai.com/v1/realtime/client_secrets", {
+  const res = await fetch("https://api.openai.com/v1/realtime/client_secrets", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${OPENAI_API_KEY}`,
@@ -50,32 +86,43 @@ serve(async (req) => {
     body: JSON.stringify(payload),
   });
 
-  const text = await r.text();
-  let data: any = null;
+  const raw = await res.text();
 
+  let out: any = null;
   try {
-    data = JSON.parse(text);
+    out = JSON.parse(raw);
   } catch {
-    data = { raw: text };
+    return json({ error: "OpenAI returned non-JSON", raw }, 502);
   }
 
-  if (!r.ok) {
+  if (!res.ok) {
     return json(
       {
-        error: "OpenAI realtime_session error",
-        status: r.status,
-        detail: data,
+        error: out?.error?.message ?? out?.error ?? "Failed to create realtime client secret",
+        detail: out,
       },
-      400
+      res.status
     );
   }
 
-  return json(
-    {
-      value: data?.client_secret?.value ?? null,
-      expires_at: data?.client_secret?.expires_at ?? null,
-      raw: data,
-    },
-    200
-  );
+  const value =
+    typeof out?.client_secret?.value === "string" && out.client_secret.value.trim()
+      ? out.client_secret.value.trim()
+      : typeof out?.value === "string" && out.value.trim()
+        ? out.value.trim()
+        : null;
+
+  const expires_at = out?.client_secret?.expires_at ?? out?.expires_at ?? null;
+
+  if (!value) {
+    return json(
+      {
+        error: "realtime token missing",
+        detail: out,
+      },
+      502
+    );
+  }
+
+  return json({ value, expires_at });
 });

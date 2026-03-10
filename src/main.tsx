@@ -9,8 +9,6 @@ import "@/index.css";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <div className="appShell">
       <RouterProvider router={router} />
-    </div>
   </React.StrictMode>
 );

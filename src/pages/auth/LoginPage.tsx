@@ -102,6 +102,7 @@ export default function LoginPage() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [autoLogin, setAutoLogin] = useState(false);
 
   const [touched, setTouched] = useState<{ email: boolean; password: boolean }>({
     email: false,
@@ -158,7 +159,6 @@ export default function LoginPage() {
         return;
       }
 
-      // 회원가입 직후 임시 저장된 프로필 정보가 있으면 여기서 최종 반영
       try {
         await applyPendingSignupProfile(data.user.id, data.user.email);
       } catch (profileError) {
@@ -167,7 +167,6 @@ export default function LoginPage() {
         return;
       }
 
-      // ab_variant 읽어서 A/B 홈으로 이동
       let variantPath: VariantPath = "a";
       try {
         variantPath = await fetchVariantPath(data.user.id);
@@ -187,8 +186,12 @@ export default function LoginPage() {
 
   return (
     <div className={styles.container}>
+      <header className={styles.header}>
+        <h1 className={styles.brand}>Engorish</h1>
+      </header>
+
       <div className={styles.content}>
-        <h1 className={styles.title}>Log in Engorish</h1>
+        <h2 className={styles.title}>Log in Engorish</h2>
 
         <form className={styles.form} onSubmit={handleLogin}>
           <div className={styles.field}>
@@ -213,11 +216,23 @@ export default function LoginPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               onBlur={() => setTouched((p) => ({ ...p, password: true }))}
-              autoComplete="current-password"
+              autoComplete={autoLogin ? "on" : "current-password"}
             />
             {passwordError ? (
               <div className={styles.helperError}>{passwordError}</div>
             ) : null}
+          </div>
+
+          <div className={styles.optionRow}>
+            <label className={styles.checkboxLabel}>
+              <input
+                className={styles.checkbox}
+                type="checkbox"
+                checked={autoLogin}
+                onChange={(e) => setAutoLogin(e.target.checked)}
+              />
+              자동 로그인
+            </label>
           </div>
 
           {formError ? <div className={styles.formError}>{formError}</div> : null}
@@ -232,7 +247,7 @@ export default function LoginPage() {
         </form>
 
         <div className={styles.signup}>
-          <p>잉고리쉬가 처음이신가요?</p>
+          <p className={styles.signupText}>잉고리쉬가 처음이신가요?</p>
           <button
             className={styles.signupBtn}
             type="button"
