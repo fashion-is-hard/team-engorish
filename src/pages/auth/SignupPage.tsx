@@ -13,12 +13,11 @@ export default function SignupPage() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-
   const [gender, setGender] = useState("");
   const [age, setAge] = useState("");
   const [stage, setStage] = useState("");
-
   const [agree, setAgree] = useState(false);
+  const [policyOpen, setPolicyOpen] = useState(false);
 
   const [touched, setTouched] = useState<Record<FieldKey, boolean>>({
     email: false,
@@ -135,7 +134,6 @@ export default function SignupPage() {
         return;
       }
 
-      // 로그인 직후 profiles 업데이트에 사용할 임시 정보 저장
       localStorage.setItem(
         SIGNUP_PROFILE_STORAGE_KEY,
         JSON.stringify({
@@ -160,13 +158,68 @@ export default function SignupPage() {
 
   return (
     <div className={styles.container}>
-      <div className={styles.topBar}>
-        <button className={styles.backBtn} type="button" onClick={() => navigate(-1)}>
-          <img className={styles.backIcon} src="/back.svg" alt="뒤로가기" />
-        </button>
-      </div>
+      {policyOpen && (
+        <div className={styles.modalOverlay} onClick={() => setPolicyOpen(false)}>
+          <div
+            className={styles.modalCard}
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-label="개인정보 처리방침"
+          >
+            <div className={styles.modalHeader}>
+              <h3 className={styles.modalTitle}>개인정보 처리방침</h3>
+              <button
+                type="button"
+                className={styles.modalClose}
+                onClick={() => setPolicyOpen(false)}
+                aria-label="닫기"
+              >
+                ✕
+              </button>
+            </div>
 
-      <div className={styles.content}>
+            <div className={styles.modalBody}>
+              <p>1. 수집하는 개인정보 항목</p>
+              <p>[필수]</p>
+              <p>이메일, 성별, 연령대, 교환학생 단계</p>
+              <p>[서비스 이용 과정에서 자동 수집]</p>
+              <p>대화 전사 텍스트, 발화량 및 플레이 진행기록, 접속 기록 및 서비스 이용 로그</p>
+              <p>*음성녹음 파일은 저장하지 않습니다</p>
+              <p>2. 개인정보 이용 목적</p>
+              <p>AI 대화 기능 제공, 발화량 측정 및 세션 진행 관리, 대화 분석 리포트 생성, 서비스 개선 및 실험결과 분석, 오류 확인 및 보안 유지</p>
+              <p>* 마케팅, 광고, 상업적 판매 목적으로 사용하지 않습니다.</p>
+              <p>3. 보유 및 이용 기간</p>
+              <p>개인정보는 실험 종료 시점 부터 1개월 이내 파기합니다.</p>
+              <p>이용자가 삭제를 요청할 경우 즉시 삭제 가능합니다.</p>
+              <p>4. 제3자 처리 및 외부 서비스 이용</p>
+              <p>서비스 운영을 위해 다음 외부 서비스를 사용합니다.</p>
+              <p>[Supabase, OpenAI API]</p>
+              <p>위 서비스는 단순 기술적 처리 목적이며 개인정보를 판매하거나 제3자에게 제공하지 않습니다.</p>
+              <p>5. 참여자의 권리 및 내부 열람 제한</p>
+              <p>참여자는 언제든지 열람, 수정, 삭제를 요청할 수 있습니다.</p>
+              <p>참여자의 발화 기록 및 개인 분석 데이터는 앱 기능 작동을 위해 데이터베이스에 임시 저장되지만 운영팀원이 이를 임의로 열람하지 않습니다.</p>
+              <p>데이터 접근 권한은 최소한으로 제한되며 연구 목적 범위 내에서만 사용됩니다.</p>
+              <p>문의: rlatpgmlid@naver.com</p>
+              <p>시행일: 2026년 3월 10일</p>
+            </div>
+
+            <button
+              type="button"
+              className={styles.modalConfirm}
+              onClick={() => setPolicyOpen(false)}
+            >
+              확인
+            </button>
+          </div>
+        </div>
+      )}
+
+      <header className={styles.header}>
+        <h1 className={styles.brand}>Engorish</h1>
+      </header>
+
+      <main className={styles.content}>
         <h2 className={styles.title}>회원가입</h2>
 
         <form className={styles.form} onSubmit={handleSignup}>
@@ -193,9 +246,7 @@ export default function SignupPage() {
               onBlur={() => setTouched((p) => ({ ...p, password: true }))}
               autoComplete="new-password"
             />
-            {passwordError ? (
-              <div className={styles.helperError}>{passwordError}</div>
-            ) : null}
+            {passwordError ? <div className={styles.helperError}>{passwordError}</div> : null}
           </div>
 
           <div className={styles.row}>
@@ -221,11 +272,11 @@ export default function SignupPage() {
                 onBlur={() => setTouched((p) => ({ ...p, age: true }))}
               >
                 <option value="">연령대</option>
-                <option value="만18-만20">만18-만20</option>
-                <option value="만21-만23">만21-만23</option>
-                <option value="만24-만26">만24-만26</option>
-                <option value="만27-만29">만27-만29</option>
-                <option value="만30 이상">만30 이상</option>
+                <option value="만20세 이하">만20세 이하</option>
+                <option value="만21-23세">만21-23세</option>
+                <option value="만24-25세">만24-25세</option>
+                <option value="만26-29세">만26-29세</option>
+                <option value="만30세 이상">만30세 이상</option>
               </select>
               {ageError ? <div className={styles.helperError}>{ageError}</div> : null}
             </div>
@@ -242,7 +293,7 @@ export default function SignupPage() {
               <option value="교환국으로 출국을 준비하고 있어요">
                 교환국으로 출국을 준비하고 있어요
               </option>
-              <option value="교환국에서 생활중이에요">교환국에서 생활중이에요</option>
+              <option value="교환국에서 체류 중이에요">교환국에서 체류 중이에요</option>
               <option value="교환 생활을 마치고 돌아왔어요">교환 생활을 마치고 돌아왔어요</option>
             </select>
             {stageError ? <div className={styles.helperError}>{stageError}</div> : null}
@@ -262,7 +313,7 @@ export default function SignupPage() {
               <button
                 type="button"
                 className={styles.policy}
-                onClick={() => navigate("/privacy")}
+                onClick={() => setPolicyOpen(true)}
               >
                 개인정보 처리방침
               </button>
@@ -279,10 +330,21 @@ export default function SignupPage() {
             disabled={!canSubmit}
             type="submit"
           >
-            {loading ? "가입 중..." : "회원가입"}
+            {loading ? "가입 중..." : "가입하기"}
           </button>
         </form>
-      </div>
+
+        <div className={styles.loginRow}>
+          <span className={styles.loginText}>이미 계정이 있으신가요?</span>
+          <button
+            className={styles.loginLink}
+            type="button"
+            onClick={() => navigate("/auth/login")}
+          >
+            로그인 하러가기
+          </button>
+        </div>
+      </main>
     </div>
   );
 }

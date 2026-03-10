@@ -1,44 +1,43 @@
 .container {
   width: 100%;
-  min-height: 100vh;
-  background: #f7f8fb; /* Background */
+  min-height: 100dvh;
+  background: #f3f4f7;
 }
 
-.topBar {
-  height: 56px;
+.header {
+  width: 100%;
+  height: 72px;
+  background: #58606b;
   display: flex;
   align-items: center;
-  padding: 0 12px;
-  border-bottom: 1px solid #dcdddf;
-  background: #f7f8fb;
+  justify-content: flex-start;
+  padding: 0 28px;
+  box-sizing: border-box;
 }
 
-.backBtn {
-  border: none;
-  background: transparent;
-  padding: 6px;
-  border-radius: 12px;
-  cursor: pointer;
-}
-
-.backBtn:hover {
-  background: rgba(220, 221, 223, 0.35);
-}
-
-.backIcon {
-  width: 28px;
-  height: 28px;
+.brand {
+  margin: 0;
+  color: #ffffff;
+  font-size: 32px;
+  line-height: 1;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  font-family: "AtoZ", system-ui, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR",
+    Arial, sans-serif;
 }
 
 .content {
-  padding: 18px 20px 28px;
-  max-width: 520px;
+  width: 100%;
+  max-width: 500px;
   margin: 0 auto;
+  padding: 42px 20px 36px;
+  box-sizing: border-box;
 }
 
 .title {
-  margin: 6px 0 16px;
-  font-size: 22px;
+  margin: 0 0 34px;
+  text-align: center;
+  font-size: 28px;
   font-weight: 700;
   color: #4e555e;
   font-family: "AtoZ", system-ui, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR",
@@ -60,33 +59,39 @@
 .input,
 .select,
 .selectFull {
-  height: 50px;
-  border-radius: 10px;
-  border: 1px solid #dcdddf;
-  background: #ffffff;
-
+  width: 100%;
+  height: 56px;
+  border-radius: 8px;
+  border: 1px solid #cfd3da;
+  background: #f3f4f7;
+  box-sizing: border-box;
   padding: 0 14px;
-  font-size: 14px;
+  font-size: 16px;
+  font-weight: 600;
   color: #4e555e;
-
+  outline: none;
   font-family: "AtoZ", system-ui, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR",
     Arial, sans-serif;
-
-  outline: none;
 }
 
 .select,
 .selectFull {
   appearance: none;
-  background-image: linear-gradient(45deg, transparent 50%, #4e555e 50%),
-    linear-gradient(135deg, #4e555e 50%, transparent 50%);
-  background-position: calc(100% - 18px) 50%, calc(100% - 12px) 50%;
+  background-image: linear-gradient(45deg, transparent 50%, #aeb4bc 50%),
+    linear-gradient(135deg, #aeb4bc 50%, transparent 50%);
+  background-position: calc(100% - 28px) calc(50% - 3px), calc(100% - 22px) calc(50% - 3px);
   background-size: 6px 6px, 6px 6px;
   background-repeat: no-repeat;
-  padding-right: 36px;
+  padding-right: 42px;
 }
 
 .input::placeholder {
+  color: #b8bbbf;
+  font-weight: 600;
+}
+
+.select:invalid,
+.selectFull:invalid {
   color: #b8bbbf;
 }
 
@@ -94,11 +99,11 @@
 .select:focus,
 .selectFull:focus {
   border-color: #99a9be;
-  box-shadow: 0 0 0 3px rgba(153, 169, 190, 0.22);
+  box-shadow: 0 0 0 3px rgba(153, 169, 190, 0.18);
 }
 
 .inputError {
-  border-color: #ff8f8f; /* Error */
+  border-color: #ff8f8f;
   box-shadow: none;
 }
 
@@ -119,22 +124,24 @@
   display: flex;
   gap: 10px;
   align-items: flex-start;
-
+  margin-top: 2px;
   font-size: 13px;
-  color: #4e555e;
-
+  color: #b8bcc4;
   user-select: none;
 }
 
 .checkbox {
   margin-top: 2px;
-  width: 18px;
-  height: 18px;
-  accent-color: #4e555e;
+  width: 16px;
+  height: 16px;
+  accent-color: #c8ccd3;
+  flex: 0 0 auto;
 }
 
 .agreeText {
-  line-height: 1.35;
+  line-height: 1.4;
+  color: #b8bcc4;
+  font-weight: 600;
 }
 
 .policy {
@@ -145,8 +152,11 @@
   text-underline-offset: 3px;
   margin-left: 6px;
   cursor: pointer;
-  font-weight: 600;
+  font-weight: 700;
   padding: 0;
+  font-size: 13px;
+  font-family: "AtoZ", system-ui, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR",
+    Arial, sans-serif;
 }
 
 .formError {
@@ -156,40 +166,167 @@
 }
 
 .button {
-  margin-top: 6px;
-  height: 50px;
+  margin-top: 8px;
+  height: 56px;
   border: none;
-  border-radius: 10px;
-
-  font-size: 15px;
-  font-weight: 600;
+  border-radius: 8px;
+  font-size: 18px;
+  font-weight: 700;
   cursor: pointer;
   transition: filter 0.12s ease;
+  font-family: "AtoZ", system-ui, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR",
+    Arial, sans-serif;
 }
 
 .buttonDisabled {
-  background: #b8bbbf;
+  background: #b8bcc4;
   color: #ffffff;
   cursor: not-allowed;
 }
 
 .buttonActive {
-  background: #4e555e;
+  background: #5a626d;
   color: #ffffff;
 }
 
 .buttonActive:hover {
-  filter: brightness(0.97);
+  filter: brightness(0.98);
+}
+
+.loginRow {
+  margin-top: 58px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.loginText {
+  color: #111111;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.4;
+  font-family: "AtoZ", system-ui, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR",
+    Arial, sans-serif;
 }
 
 .loginLink {
-  margin-top: 4px;
   border: none;
   background: none;
   color: #99a9be;
   text-decoration: underline;
   text-underline-offset: 3px;
   cursor: pointer;
-  font-weight: 600;
-  padding: 10px 0 0;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.4;
+  padding: 0;
+  font-family: "AtoZ", system-ui, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR",
+    Arial, sans-serif;
+}
+
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(32, 35, 40, 0.34);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 1000;
+  box-sizing: border-box;
+}
+
+.modalCard {
+  width: 100%;
+  max-width: 520px;
+  background: #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.18);
+  padding: 20px 20px 18px;
+  box-sizing: border-box;
+}
+
+.modalHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.modalTitle {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: #4e555e;
+  font-family: "AtoZ", system-ui, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR",
+    Arial, sans-serif;
+}
+
+.modalClose {
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+  color: #4e555e;
+  padding: 4px;
+}
+
+.modalBody {
+  max-height: 340px;
+  overflow-y: auto;
+  font-size: 14px;
+  line-height: 1.65;
+  color: #4e555e;
+  font-family: "AtoZ", system-ui, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR",
+    Arial, sans-serif;
+}
+
+.modalBody p {
+  margin: 0 0 12px;
+}
+
+.modalConfirm {
+  width: 100%;
+  height: 48px;
+  margin-top: 14px;
+  border: none;
+  border-radius: 10px;
+  background: #5a626d;
+  color: #ffffff;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: "AtoZ", system-ui, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR",
+    Arial, sans-serif;
+}
+
+@media (max-width: 768px) {
+  .header {
+    padding: 0 20px;
+  }
+
+  .brand {
+    font-size: 28px;
+  }
+
+  .content {
+    padding: 34px 20px 30px;
+  }
+
+  .title {
+    font-size: 24px;
+    margin-bottom: 26px;
+  }
+
+  .row {
+    grid-template-columns: 1fr;
+  }
+
+  .loginRow {
+    margin-top: 42px;
+  }
 }

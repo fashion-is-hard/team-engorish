@@ -102,7 +102,6 @@ export default function LoginPage() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [autoLogin, setAutoLogin] = useState(false);
 
   const [touched, setTouched] = useState<{ email: boolean; password: boolean }>({
     email: false,
@@ -190,7 +189,7 @@ export default function LoginPage() {
         <h1 className={styles.brand}>Engorish</h1>
       </header>
 
-      <div className={styles.content}>
+      <main className={styles.content}>
         <h2 className={styles.title}>Log in Engorish</h2>
 
         <form className={styles.form} onSubmit={handleLogin}>
@@ -216,23 +215,9 @@ export default function LoginPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               onBlur={() => setTouched((p) => ({ ...p, password: true }))}
-              autoComplete={autoLogin ? "on" : "current-password"}
+              autoComplete="current-password"
             />
-            {passwordError ? (
-              <div className={styles.helperError}>{passwordError}</div>
-            ) : null}
-          </div>
-
-          <div className={styles.optionRow}>
-            <label className={styles.checkboxLabel}>
-              <input
-                className={styles.checkbox}
-                type="checkbox"
-                checked={autoLogin}
-                onChange={(e) => setAutoLogin(e.target.checked)}
-              />
-              자동 로그인
-            </label>
+            {passwordError ? <div className={styles.helperError}>{passwordError}</div> : null}
           </div>
 
           {formError ? <div className={styles.formError}>{formError}</div> : null}
@@ -247,7 +232,7 @@ export default function LoginPage() {
         </form>
 
         <div className={styles.signup}>
-          <p className={styles.signupText}>잉고리쉬가 처음이신가요?</p>
+          <span className={styles.signupText}>잉고리쉬가 처음이신가요?</span>
           <button
             className={styles.signupBtn}
             type="button"
@@ -256,7 +241,7 @@ export default function LoginPage() {
             회원가입
           </button>
         </div>
-      </div>
+      </main>
     </div>
   );
 }
