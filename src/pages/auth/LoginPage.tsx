@@ -238,16 +238,19 @@ export default function LoginPage() {
             </button>
           </div>
 
-          <div className={styles.signup}>
-            <span className={styles.signupText}>비밀번호를 잊으셨나요?</span>
-            <button
-            className={styles.signupBtn}
-            type="button"
-            onClick={() => navigate("/auth/reset-password")}
-          >
-            비밀번호 재설정
-          </button>
+          <div className={styles.demoAccount}>
+            <div className={styles.demoText}>
+              빠른 이용을 원하시면 아래 계정으로 로그인 해주세요!
+            </div>
+
+            <div className={styles.demoCredential}>
+              <div>ID: prototype@eng.com</div>
+              <div>PW: engorish</div>
+            </div>
           </div>
+                  
+
+          
         </div>
       </main>
     </div>

@@ -186,3 +186,26 @@
   font-family: "AtoZ", system-ui, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR",
     Arial, sans-serif;
 }
+
+.demoAccount {
+  margin-top: 32px;
+  padding: 20px 24px;
+  border-radius: 12px;
+  background: #ffffff;
+  text-align: center;
+  border: 1px solid #B0B6BD;
+}
+
+.demoText {
+  font-size: 14px;
+  color: #4b5563;
+  margin-bottom: 12px;
+  font-weight: 500;
+}
+
+.demoCredential {
+  font-size: 12px;
+  font-weight: 400;
+  color: #374151;
+  line-height: 1.8;
+}
