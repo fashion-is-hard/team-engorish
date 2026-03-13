@@ -56,6 +56,7 @@ export default function HomePage() {
           <div className={styles.noticeTitle}>📌 공지 사항</div>
           <ul className={styles.noticeList}>
             <li>프로토타입 체험은 "목적형 롤플레이" 타입으로만 진행됩니다.</li>
+            <li>실시간 음성대화 기능은 PC Chrome 환경에 최적화되어있습니다.</li>
           </ul>
         </section>
 
