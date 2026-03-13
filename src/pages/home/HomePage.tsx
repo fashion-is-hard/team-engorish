@@ -53,12 +53,9 @@ export default function HomePage() {
         <h1 className={styles.title}>Welcome to Engorish!</h1>
 
         <section className={styles.noticeCard}>
-          <div className={styles.noticeTitle}>📌 업데이트 사항 (20260313 00:20)</div>
+          <div className={styles.noticeTitle}>📌 공지 사항</div>
           <ul className={styles.noticeList}>
-            <li>3일간의 체험에 참여해주신 모든 분들께 진심으로 감사의 인사를 전합니다.</li>
-            <li>아울러 체험 후기 설문조사와 기프티콘 추첨 이벤트를 진행합니다!</li>
-            <li>가입하신 이메일로 설문조사 폼을 보내드렸으니 확인을 부탁드립니다</li>
-            <li>혹여나 메일이 도착하지 않으신 분은 rlatpgmlid@naver.com으로 문의 바랍니다</li>
+            <li>프로토타입 체험은 "목적형 롤플레이" 타입으로만 진행됩니다.</li>
           </ul>
         </section>
 
